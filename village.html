@@ -18,9 +18,36 @@
         .table-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
         .tab-btn.active { background-color: #2563eb; color: #ffffff; }
         .cal-cell { width: 10px; height: 10px; border-radius: 2px; }
+
+        /* ===== Monsoon mode ===== */
+        #rain-canvas { position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: 0; transition: opacity .6s; }
+        body[data-theme="monsoon"] #rain-canvas { opacity: 0.55; }
+        body[data-theme="monsoon"] { background: #080b10 !important; color: #e7ecf4; }
+        body[data-theme="monsoon"] .max-w-7xl { position: relative; z-index: 1; }
+        body[data-theme="monsoon"] .bg-white { background-color: #131a24 !important; }
+        body[data-theme="monsoon"] .bg-slate-50 { background-color: #161d29 !important; }
+        body[data-theme="monsoon"] .bg-slate-100 { background-color: #1b2430 !important; }
+        body[data-theme="monsoon"] .bg-blue-50 { background-color: rgba(94,185,247,0.1) !important; }
+        body[data-theme="monsoon"] .bg-blue-50\/30 { background-color: rgba(94,185,247,0.06) !important; }
+        body[data-theme="monsoon"] .bg-blue-100 { background-color: rgba(94,185,247,0.16) !important; }
+        body[data-theme="monsoon"] .bg-emerald-50 { background-color: rgba(55,214,196,0.1) !important; }
+        body[data-theme="monsoon"] .bg-rose-50, body[data-theme="monsoon"] .bg-rose-100 { background-color: rgba(242,112,122,0.1) !important; }
+        body[data-theme="monsoon"] .text-blue-800, body[data-theme="monsoon"] .text-blue-700 { color: #7ec4f5 !important; }
+        body[data-theme="monsoon"] .text-slate-900, body[data-theme="monsoon"] .text-slate-800 { color: #e7ecf4 !important; }
+        body[data-theme="monsoon"] .text-slate-700, body[data-theme="monsoon"] .text-slate-600 { color: #a3afc2 !important; }
+        body[data-theme="monsoon"] .text-slate-500, body[data-theme="monsoon"] .text-slate-400 { color: #6b7690 !important; }
+        body[data-theme="monsoon"] .border-slate-200, body[data-theme="monsoon"] .border-slate-100 { border-color: #232d3d !important; }
+        body[data-theme="monsoon"] .divide-slate-100 > * { border-color: #232d3d !important; }
+        body[data-theme="monsoon"] .hover\:bg-slate-50:hover { background-color: #1b2430 !important; }
+        body[data-theme="monsoon"] input, body[data-theme="monsoon"] select {
+          background-color: #0d121a !important; color: #e7ecf4 !important; border-color: #232d3d !important; }
+        #theme-toggle { display:flex; align-items:center; gap:6px; background:#1b2430; color:#a3afc2;
+          border:1px solid #2b3546; padding:8px 14px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; }
+        body[data-theme="monsoon"] #theme-toggle { background:linear-gradient(135deg,#2f6fa8,#1f4f80); color:#fff; border-color:transparent; }
     </style>
 </head>
 <body id="top" class="p-4 md:p-6">
+<canvas id="rain-canvas"></canvas>
 
     <div class="max-w-7xl mx-auto">
         <!-- Header & Top Navigation -->
@@ -34,10 +61,13 @@
                     <a href="#ensoPanel" class="inline-block text-xs font-semibold text-rose-600 hover:text-rose-800 bg-rose-50 px-2.5 py-1 rounded-md border border-rose-200 transition-all">↓ ENSO Analysis</a>
                 </div>
             </div>
-            <div class="flex bg-slate-100 p-1.5 rounded-lg border border-slate-200 gap-1">
+            <div class="flex items-center gap-2">
+              <div class="flex bg-slate-100 p-1.5 rounded-lg border border-slate-200 gap-1">
                 <button onclick="switchTab('explorer')" id="tabbtn-explorer" class="tab-btn active px-4 py-2 text-sm font-semibold rounded-md transition-all">Explorer</button>
                 <button onclick="switchTab('entry')" id="tabbtn-entry" class="tab-btn text-slate-600 px-4 py-2 text-sm font-semibold rounded-md transition-all">Entry & Logs</button>
                 <button onclick="switchTab('settings')" id="tabbtn-settings" class="tab-btn text-slate-600 px-4 py-2 text-sm font-semibold rounded-md transition-all">Settings</button>
+              </div>
+              <button id="theme-toggle" onclick="toggleMonsoonMode()">☁︎ Monsoon mode</button>
             </div>
         </div>
 
@@ -476,8 +506,102 @@
         
         initTop5Grid();
         renderNormalsInputs();
-        updateYearDropdowns();
-        renderAll();
+
+        loadRemoteBaseline().finally(() => {
+            updateYearDropdowns();
+            renderAll();
+            if (localStorage.getItem('theme_monsoon') === '1') setMonsoonMode(true);
+        });
+    }
+
+    // Pulls myvillage.csv from the same folder (repo baseline) and fills in any date
+    // not already present locally. Local entries (your phone updates since the last
+    // weekly export) always win — this only backfills gaps, never overwrites.
+    async function loadRemoteBaseline() {
+        try {
+            const res = await fetch('./myvillage.csv', { cache: 'no-store' });
+            if (!res.ok) return;
+            const text = await res.text();
+            const parsed = Papa.parse(text, {
+                header: true, skipEmptyLines: true,
+                transformHeader: h => h.replace(/^\uFEFF/g, '').trim().toLowerCase()
+            });
+            let added = 0;
+            parsed.data.forEach(row => {
+                const dStr = row.date, mRaw = row.mm;
+                if (!dStr || mRaw === undefined || mRaw === null || mRaw === '') return;
+                const parts = dStr.toString().split(/[-/]/);
+                if (parts.length !== 3) return;
+                const yr = parts[0].length === 4 ? parts[0] : parts[2];
+                const mo = parts[1];
+                const da = parts[0].length === 4 ? parts[2] : parts[0];
+                const stdDate = `${yr}-${String(mo).padStart(2,'0')}-${String(da).padStart(2,'0')}`;
+                if (!(stdDate in entries)) {
+                    const mm = parseFloat(mRaw);
+                    if (!isNaN(mm)) { entries[stdDate] = { mm: Math.round(mm * 10) / 10, note: (row.note || '').trim() }; added++; }
+                }
+            });
+            if (added > 0) saveEntries();
+        } catch (e) {
+            // Offline, opened as a local file, or no CSV alongside index.html yet — fine, local data still works.
+        }
+    }
+
+    // ==========================================
+    // MONSOON MODE (dark theme + rain animation)
+    // ==========================================
+    let rainAnimId = null;
+    function toggleMonsoonMode() {
+        const on = document.body.getAttribute('data-theme') !== 'monsoon';
+        setMonsoonMode(on);
+        localStorage.setItem('theme_monsoon', on ? '1' : '0');
+    }
+    function setMonsoonMode(on) {
+        document.body.setAttribute('data-theme', on ? 'monsoon' : 'light');
+        document.getElementById('theme-toggle').textContent = on ? '☀ Light mode' : '☁︎ Monsoon mode';
+        on ? startRain() : stopRain();
+        restyleCharts(on);
+    }
+    function startRain() {
+        const canvas = document.getElementById('rain-canvas');
+        const ctx = canvas.getContext('2d');
+        function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+        resize(); window.addEventListener('resize', resize);
+        const drops = Array.from({length: 160}, () => ({
+            x: Math.random() * canvas.width, y: Math.random() * canvas.height,
+            len: 10 + Math.random() * 18, speed: 4 + Math.random() * 7, drift: -0.5 + Math.random()
+        }));
+        function frame() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = 'rgba(120,170,220,0.35)'; ctx.lineWidth = 1;
+            drops.forEach(d => {
+                ctx.beginPath(); ctx.moveTo(d.x, d.y); ctx.lineTo(d.x + d.drift * 3, d.y + d.len); ctx.stroke();
+                d.y += d.speed; d.x += d.drift;
+                if (d.y > canvas.height) { d.y = -d.len; d.x = Math.random() * canvas.width; }
+            });
+            rainAnimId = requestAnimationFrame(frame);
+        }
+        if (!rainAnimId) frame();
+    }
+    function stopRain() {
+        if (rainAnimId) { cancelAnimationFrame(rainAnimId); rainAnimId = null; }
+        const canvas = document.getElementById('rain-canvas');
+        canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+    }
+    function restyleCharts(dark) {
+        const paper = dark ? 'rgba(0,0,0,0)' : '#ffffff';
+        const font = dark ? '#a3afc2' : '#334155';
+        const grid = dark ? '#232d3d' : '#e2e8f0';
+        document.querySelectorAll('.js-plotly-plot').forEach(div => {
+            try {
+                Plotly.relayout(div, {
+                    paper_bgcolor: paper, plot_bgcolor: paper,
+                    'font.color': font,
+                    'xaxis.gridcolor': grid, 'yaxis.gridcolor': grid,
+                    'xaxis.zerolinecolor': grid, 'yaxis.zerolinecolor': grid
+                });
+            } catch(e) {}
+        });
     }
 
     function switchTab(tabId) {
@@ -494,6 +618,7 @@
         
         if (tabId === 'explorer') renderAll();
         if (tabId === 'entry') renderLogs();
+        if (document.body.getAttribute('data-theme') === 'monsoon') restyleCharts(true);
     }
 
     function initTop5Grid() {
@@ -973,6 +1098,8 @@
             { x: monthNames, y: localNormM, type: 'scatter', mode: 'lines+markers', name: `Local Avg (${localBaseStartYear}-${localBaseEndYear})`, line: {color: '#8b5cf6', width: 2, dash: 'dot'}, marker: {size: 6} }
         ];
         Plotly.newPlot('plotMonthVsLocal', localTraces, { ...pLayout, margin:{t:20,l:40,r:20,b:40}, barmode: 'group', showlegend: true, legend:{orientation:'h', y:-0.15} }, {responsive: true});
+
+        if (document.body.getAttribute('data-theme') === 'monsoon') restyleCharts(true);
     }
 
     function renderAll() {
@@ -1183,31 +1310,39 @@
         ['light','mod','heavy','vHeavy','eHeavy','exHeavy','totalRainy'].forEach(c => { updateUI('imd' + c.charAt(0).toUpperCase() + c.slice(1), imdCounts[c]); });
         ['t50','t100','t150','t200','t250'].forEach(t => { updateUI(t.replace('t','thr'), thrCounts[t]); });
 
-        // Calculate Average Rainy Days (>= 2.5mm) per month across valid years
+        // Calculate Average Rainy Days (>= 2.5mm) per month across valid years, per IMD class
         let avgDaysPerMonth = Array(12).fill(0);
         let allYearsUnique = Array.from(new Set(dates.map(d => parseInt(d.split('-')[0], 10))));
-        
-        let totalRainySum = 0;
+
+        let catSums = { light:0, mod:0, heavy:0, vHeavy:0, eHeavy:0, exHeavy:0, totalRainy:0 };
         for (let m = 1; m <= 12; m++) {
             let validYCount = 0;
-            let mDaysTotal = 0;
+            let mCat = { light:0, mod:0, heavy:0, vHeavy:0, eHeavy:0, exHeavy:0, totalRainy:0 };
             allYearsUnique.forEach(y => {
                 if (y > 2021 || (y === 2021 && m >= 9)) {
                     validYCount++;
-                    let c = 0;
                     dates.filter(d => d.startsWith(`${y}-${String(m).padStart(2,'0')}`)).forEach(d => {
-                        if (entries[d].mm >= 2.5) c++;
+                        const r = entries[d].mm;
+                        if (r >= 2.5) {
+                            mCat.totalRainy++;
+                            if (r < 15.6) mCat.light++; else if (r < 64.5) mCat.mod++; else if (r < 115.6) mCat.heavy++;
+                            else if (r < 204.5) mCat.vHeavy++; else if (r < 244.5) mCat.eHeavy++; else mCat.exHeavy++;
+                        }
                     });
-                    mDaysTotal += c;
                 }
             });
-            let mAvg = validYCount > 0 ? (mDaysTotal / validYCount) : 0;
+            Object.keys(catSums).forEach(k => { catSums[k] += validYCount > 0 ? (mCat[k] / validYCount) : 0; });
+            let mAvg = validYCount > 0 ? (mCat.totalRainy / validYCount) : 0;
             avgDaysPerMonth[m-1] = mAvg;
-            totalRainySum += mAvg;
             updateUI(`avg-days-${m}`, mAvg.toFixed(1) + ' days');
-            updateUI(`avgLight`, '--'); // Kept blank to avoid miscalculation logic for subtypes
         }
-        updateUI('avgTotalRainy', totalRainySum.toFixed(1));
+        updateUI('avgLight', catSums.light.toFixed(1));
+        updateUI('avgMod', catSums.mod.toFixed(1));
+        updateUI('avgHeavy', catSums.heavy.toFixed(1));
+        updateUI('avgVHeavy', catSums.vHeavy.toFixed(1));
+        updateUI('avgEHeavy', catSums.eHeavy.toFixed(1));
+        updateUI('avgExHeavy', catSums.exHeavy.toFixed(1));
+        updateUI('avgTotalRainy', catSums.totalRainy.toFixed(1));
 
         for (let m = 0; m < 12; m++) {
             let top5 = monthRecords[m].sort((a, b) => b.rain - a.rain).slice(0, 5);
@@ -1271,6 +1406,8 @@
 
         // 11. ENSO Analysis Panel
         renderEnsoSection();
+
+        if (document.body.getAttribute('data-theme') === 'monsoon') restyleCharts(true);
     }
 
     function renderEnsoSection() {
