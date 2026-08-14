@@ -1,0 +1,1389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Soorakkottai Rainfall Explorer & Diary</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        html { scroll-behavior: smooth; }
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; color: #0f172a; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        .stat-card { transition: transform 0.2s; }
+        .stat-card:hover { transform: translateY(-2px); }
+        .table-container::-webkit-scrollbar { height: 8px; width: 6px; }
+        .table-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .tab-btn.active { background-color: #2563eb; color: #ffffff; }
+        .cal-cell { width: 10px; height: 10px; border-radius: 2px; }
+    </style>
+</head>
+<body id="top" class="p-4 md:p-6">
+
+    <div class="max-w-7xl mx-auto">
+        <!-- Header & Top Navigation -->
+        <div class="bg-white rounded-xl shadow-sm p-6 mb-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-t-4 border-blue-600">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-900 mb-1">☁︎ Soorakkottai Rainfall Explorer & Diary</h1>
+                <p class="text-sm text-slate-500">Historical Climatology, Gauge Log & Statistical Dashboard</p>
+                <div class="flex flex-wrap gap-3 mt-3">
+                    <a href="#historicalClimatology" class="inline-block text-xs font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-200 transition-all">↓ Historical Climatology</a>
+                    <a href="#chartsGrid" class="inline-block text-xs font-semibold text-emerald-600 hover:text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200 transition-all">↓ 10 Advanced Charts</a>
+                    <a href="#ensoPanel" class="inline-block text-xs font-semibold text-rose-600 hover:text-rose-800 bg-rose-50 px-2.5 py-1 rounded-md border border-rose-200 transition-all">↓ ENSO Analysis</a>
+                </div>
+            </div>
+            <div class="flex bg-slate-100 p-1.5 rounded-lg border border-slate-200 gap-1">
+                <button onclick="switchTab('explorer')" id="tabbtn-explorer" class="tab-btn active px-4 py-2 text-sm font-semibold rounded-md transition-all">Explorer</button>
+                <button onclick="switchTab('entry')" id="tabbtn-entry" class="tab-btn text-slate-600 px-4 py-2 text-sm font-semibold rounded-md transition-all">Entry & Logs</button>
+                <button onclick="switchTab('settings')" id="tabbtn-settings" class="tab-btn text-slate-600 px-4 py-2 text-sm font-semibold rounded-md transition-all">Settings</button>
+            </div>
+        </div>
+
+        <!-- WHITE SPELL TRACKER BANNER -->
+        <div class="bg-white rounded-xl shadow-sm p-6 mb-6 flex flex-wrap gap-6 justify-between items-center border border-slate-200">
+            <div>
+                <p class="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">Current Spell</p>
+                <p class="text-lg font-bold mono text-slate-500" id="spell-current">--</p>
+            </div>
+            <div>
+                <p class="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">Longest Wet Spell</p>
+                <p class="text-lg font-bold text-slate-900 mono" id="spell-wet-len">--</p>
+                <p class="text-xs text-slate-400 font-medium mt-0.5" id="spell-wet-dates">--</p>
+            </div>
+            <div>
+                <p class="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">Longest Dry Spell</p>
+                <p class="text-lg font-bold text-slate-900 mono" id="spell-dry-len">--</p>
+                <p class="text-xs text-slate-400 font-medium mt-0.5" id="spell-dry-dates">--</p>
+            </div>
+            <div class="text-right border-l border-slate-100 pl-6">
+                <p class="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">All-Time Daily Record</p>
+                <p class="text-2xl font-bold mono text-amber-500" id="spell-rec-val">--</p>
+                <p class="text-xs text-slate-400 font-medium mt-0.5" id="spell-rec-date">--</p>
+            </div>
+        </div>
+
+        <!-- ================= EXPLORER TAB ================= -->
+        <div id="view-explorer" class="space-y-6">
+            
+            <!-- CURRENT YEAR SNAPSHOT -->
+            <div class="bg-white rounded-xl shadow-sm p-6 border border-slate-200">
+                <div class="flex flex-wrap justify-between items-center mb-5 gap-4">
+                    <h2 class="text-xl font-bold text-slate-800">Current Year Snapshot</h2>
+                    <div class="flex items-center gap-3">
+                        <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">Focus Year:</label>
+                        <select id="snapshotYearSelect" onchange="updateSnapshot()" class="bg-slate-50 border border-slate-300 text-slate-900 text-sm font-bold rounded-lg p-2"></select>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-slate-50 rounded-xl p-5 border-l-4 border-blue-500 shadow-inner">
+                        <p class="text-xs text-slate-500 font-bold uppercase tracking-wide"><span id="lbl-ytd-total">YTD Total</span></p>
+                        <p class="text-2xl font-bold text-slate-900 mt-1 mono"><span id="snap-ytd-total">0.0</span> <span class="text-sm font-normal">mm</span></p>
+                    </div>
+                    <div class="bg-slate-50 rounded-xl p-5 border-l-4 border-slate-400 shadow-inner">
+                        <p class="text-xs text-slate-500 font-bold uppercase tracking-wide">Annual Normal To Date</p>
+                        <p class="text-2xl font-bold text-slate-900 mt-1 mono"><span id="snap-normal-todate">0.0</span> <span class="text-sm font-normal">mm</span></p>
+                    </div>
+                    <div class="bg-slate-50 rounded-xl p-5 border-l-4 border-slate-200 shadow-inner" id="snap-card-departure">
+                        <p class="text-xs text-slate-500 font-bold uppercase tracking-wide">YTD Departure</p>
+                        <p class="text-2xl font-bold mt-1 mono" id="snap-departure">0%</p>
+                    </div>
+                    <div class="bg-slate-50 rounded-xl p-5 border-l-4 border-amber-500 shadow-inner">
+                        <p class="text-xs text-slate-500 font-bold uppercase tracking-wide">Highest Daily Event</p>
+                        <p class="text-2xl font-bold text-slate-900 mt-1 mono"><span id="snap-max-val">0.0</span> <span class="text-sm font-normal">mm</span></p>
+                        <p class="text-xs text-slate-400 mt-1 font-medium" id="snap-max-date">--</p>
+                    </div>
+                </div>
+
+                <!-- 4-Season Active Tracker -->
+                <div class="border-t border-slate-100 pt-5 pb-2">
+                    <h3 class="text-sm font-bold text-slate-800 mb-3">Current Year Seasonal Tracker</h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" id="snap-seasons-grid">
+                        <!-- Populated via JS -->
+                    </div>
+                </div>
+
+                <div class="pt-6 mb-6 border-t border-slate-100 pb-8">
+                    <h3 class="text-md font-bold text-slate-800 mb-1">Cumulative Rainfall vs Normals</h3>
+                    <p class="text-xs text-slate-500 mb-4">Tracks daily accumulation against the Thanjavur baseline and the local Soorakkottai average.</p>
+                    <div id="plotCumulativeYTD" class="w-full h-[380px]"></div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-4 border-t border-slate-100">
+                    <div>
+                        <h3 class="text-md font-bold text-slate-800 mb-1">Monthly vs Thanjavur Normal</h3>
+                        <p class="text-xs text-slate-500 mb-4">Comparing current year against the 1991-2020 regional baseline.</p>
+                        <div id="plotMonthVsThanjavur" class="w-full h-[400px]"></div>
+                    </div>
+                    <div>
+                        <h3 class="text-md font-bold text-slate-800 mb-1">Monthly vs Local Average (<span id="localBaseTitle">2022-2025</span>)</h3>
+                        <p class="text-xs text-slate-500 mb-4">Comparing current year against our dynamic recent historical average.</p>
+                        <div id="plotMonthVsLocal" class="w-full h-[400px]"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- HISTORICAL CLIMATOLOGY -->
+            <div id="historicalClimatology" class="pt-4 scroll-mt-6">
+                <!-- Controls Toolbar -->
+                <div class="bg-white rounded-xl shadow-sm p-4 flex flex-wrap items-center justify-between gap-4 border border-slate-200 mb-6">
+                    <div class="flex items-center gap-3">
+                        <label class="text-xs font-bold text-slate-500 uppercase tracking-wide">Historical Timeframe:</label>
+                        <select id="startYearSelect" class="bg-slate-50 border border-slate-300 text-slate-900 text-sm font-bold rounded-lg p-2"></select>
+                        <span class="text-slate-400 font-bold">to</span>
+                        <select id="endYearSelect" class="bg-slate-50 border border-slate-300 text-slate-900 text-sm font-bold rounded-lg p-2"></select>
+                    </div>
+                    <div class="text-xs text-blue-700 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg font-medium" id="climatology-note">
+                        Strict Climatology: Incomplete years are automatically safely ignored to prevent skewed averages. Valid complete seasons are preserved.
+                    </div>
+                </div>
+
+                <!-- General Distribution Stats -->
+                <h2 class="text-lg font-bold text-slate-800 mb-3">Historical General Distribution Stats</h2>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8" id="statsContainer">
+                    <div class="bg-white rounded-xl shadow-sm p-4 stat-card border-l-4 border-blue-500">
+                        <div class="flex justify-between items-start">
+                            <p class="text-xs text-slate-500 font-bold uppercase tracking-wide">Mean Annual</p>
+                            <p class="text-[10px] text-slate-400 font-semibold bg-slate-50 px-2 py-0.5 rounded border border-slate-100">Norm: <span id="normANN">--</span></p>
+                        </div>
+                        <p class="text-xl font-bold text-slate-900 mt-1"><span id="valMean">--</span> <span class="text-sm font-normal text-slate-500">mm</span></p>
+                        <div class="flex justify-between items-center mt-1">
+                            <p class="text-xs text-slate-400">Median: <span id="valMedian">--</span></p>
+                            <p class="text-xs font-bold" id="pctANN">--%</p>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-sm p-4 stat-card border-l-4 border-emerald-500">
+                        <p class="text-xs text-slate-500 font-bold uppercase tracking-wide">Wettest Year</p>
+                        <p class="text-lg font-bold text-slate-900 mt-1"><span id="valMaxYear">--</span></p>
+                        <p class="text-xs text-slate-400 mt-1"><span id="valMax">--</span> mm</p>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-sm p-4 stat-card border-l-4 border-red-500">
+                        <p class="text-xs text-slate-500 font-bold uppercase tracking-wide">Driest Year</p>
+                        <p class="text-lg font-bold text-slate-900 mt-1"><span id="valMinYear">--</span></p>
+                        <p class="text-xs text-slate-400 mt-1"><span id="valMin">--</span> mm</p>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-sm p-4 stat-card border-l-4 border-purple-500">
+                        <p class="text-xs text-slate-500 font-bold uppercase tracking-wide">Distribution</p>
+                        <p class="text-xs font-bold text-slate-900 mt-1">Skew: <span id="valSkew" class="font-normal text-slate-600">--</span></p>
+                        <p class="text-xs font-bold text-slate-900 mt-1">Kurt: <span id="valKurt" class="font-normal text-slate-600">--</span></p>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-sm p-4 stat-card border-l-4 border-indigo-500">
+                        <p class="text-xs text-slate-500 font-bold uppercase tracking-wide">Dispersion (Var)</p>
+                        <p class="text-xs font-bold text-slate-900 mt-1">SD (σ): <span id="valSD" class="font-normal text-slate-600">--</span></p>
+                        <p class="text-xs font-bold text-slate-900 mt-1">CV: <span id="valCV" class="font-normal text-slate-600">--</span></p>
+                        <p class="text-xs font-bold text-slate-900 mt-1">IQR: <span id="valIQR" class="font-normal text-slate-600">--</span></p>
+                    </div>
+                </div>
+
+                <!-- Seasonal Climatology -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-800 mb-3">Seasonal Climatology (Averages vs Normal)</h2>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div class="bg-white rounded-xl shadow-sm p-5 border-l-4 border-sky-300">
+                                <div class="flex justify-between items-start">
+                                    <p class="text-sm text-slate-500 font-medium uppercase tracking-wide">Winter (JF)</p>
+                                    <p class="text-[10px] text-slate-400 font-semibold bg-slate-50 px-2 py-0.5 rounded border border-slate-100">Norm: <span id="normJF">--</span> mm</p>
+                                </div>
+                                <p class="text-2xl font-bold text-slate-900 mt-1"><span id="avgJF">--</span> <span class="text-sm font-normal text-slate-500">mm</span></p>
+                                <p class="text-sm mt-1 font-bold" id="pctJF">--%</p>
+                            </div>
+                            <div class="bg-white rounded-xl shadow-sm p-5 border-l-4 border-amber-400">
+                                <div class="flex justify-between items-start">
+                                    <p class="text-sm text-slate-500 font-medium uppercase tracking-wide">Pre-Monsoon (MAM)</p>
+                                    <p class="text-[10px] text-slate-400 font-semibold bg-slate-50 px-2 py-0.5 rounded border border-slate-100">Norm: <span id="normMAM">--</span> mm</p>
+                                </div>
+                                <p class="text-2xl font-bold text-slate-900 mt-1"><span id="avgMAM">--</span> <span class="text-sm font-normal text-slate-500">mm</span></p>
+                                <p class="text-sm mt-1 font-bold" id="pctMAM">--%</p>
+                            </div>
+                            <div class="bg-white rounded-xl shadow-sm p-5 border-l-4 border-emerald-500">
+                                <div class="flex justify-between items-start">
+                                    <p class="text-sm text-slate-500 font-medium uppercase tracking-wide">SW Monsoon (JJAS)</p>
+                                    <p class="text-[10px] text-slate-400 font-semibold bg-slate-50 px-2 py-0.5 rounded border border-slate-100">Norm: <span id="normJJAS">--</span> mm</p>
+                                </div>
+                                <p class="text-2xl font-bold text-slate-900 mt-1"><span id="avgJJAS">--</span> <span class="text-sm font-normal text-slate-500">mm</span></p>
+                                <p class="text-sm mt-1 font-bold" id="pctJJAS">--%</p>
+                            </div>
+                            <div class="bg-white rounded-xl shadow-sm p-5 border-l-4 border-indigo-600">
+                                <div class="flex justify-between items-start">
+                                    <p class="text-sm text-slate-500 font-medium uppercase tracking-wide">NE Monsoon (OND)</p>
+                                    <p class="text-[10px] text-slate-400 font-semibold bg-slate-50 px-2 py-0.5 rounded border border-slate-100">Norm: <span id="normOND">--</span> mm</p>
+                                </div>
+                                <p class="text-2xl font-bold text-slate-900 mt-1"><span id="avgOND">--</span> <span class="text-sm font-normal text-slate-500">mm</span></p>
+                                <p class="text-sm mt-1 font-bold" id="pctOND">--%</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- IMD Classification & Rainy Days -->
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-800 mb-3">IMD Classification & Rainy Days</h2>
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-x-auto table-container">
+                            <table class="w-full text-sm text-left text-slate-600">
+                                <thead class="text-xs text-slate-700 uppercase bg-slate-50 border-b border-slate-200">
+                                    <tr>
+                                        <th class="px-4 py-4 font-bold">IMD Classification</th>
+                                        <th class="px-4 py-4 font-bold text-right">Event Count</th>
+                                        <th class="px-4 py-4 font-bold text-right bg-blue-50 text-blue-800" title="Average days per year based on recorded history since Aug 2021">Avg Days/Yr</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    <tr class="hover:bg-slate-50"><td class="px-4 py-2.5">Light Rain (2.5 - 15.5 mm)</td><td class="px-4 py-2.5 text-right font-bold text-slate-900 mono" id="imdLight">--</td><td class="px-4 py-2.5 text-right font-bold text-blue-700 mono bg-blue-50/30" id="avgLight">--</td></tr>
+                                    <tr class="hover:bg-slate-50"><td class="px-4 py-2.5">Moderate (15.6 - 64.4 mm)</td><td class="px-4 py-2.5 text-right font-bold text-slate-900 mono" id="imdMod">--</td><td class="px-4 py-2.5 text-right font-bold text-blue-700 mono bg-blue-50/30" id="avgMod">--</td></tr>
+                                    <tr class="hover:bg-slate-50"><td class="px-4 py-2.5">Heavy Rain (64.5 - 115.5 mm)</td><td class="px-4 py-2.5 text-right font-bold text-slate-900 mono" id="imdHeavy">--</td><td class="px-4 py-2.5 text-right font-bold text-blue-700 mono bg-blue-50/30" id="avgHeavy">--</td></tr>
+                                    <tr class="hover:bg-slate-50"><td class="px-4 py-2.5">Very Heavy (115.6 - 204.4)</td><td class="px-4 py-2.5 text-right font-bold text-slate-900 mono" id="imdVHeavy">--</td><td class="px-4 py-2.5 text-right font-bold text-blue-700 mono bg-blue-50/30" id="avgVHeavy">--</td></tr>
+                                    <tr class="hover:bg-slate-50"><td class="px-4 py-2.5">Extremely Heavy (204.5 - 244.4)</td><td class="px-4 py-2.5 text-right font-bold text-slate-900 mono" id="imdEHeavy">--</td><td class="px-4 py-2.5 text-right font-bold text-blue-700 mono bg-blue-50/30" id="avgEHeavy">--</td></tr>
+                                    <tr class="hover:bg-slate-50"><td class="px-4 py-2.5">Exceptionally Heavy (≥ 244.5)</td><td class="px-4 py-2.5 text-right font-bold text-slate-900 mono" id="imdExHeavy">--</td><td class="px-4 py-2.5 text-right font-bold text-blue-700 mono bg-blue-50/30" id="avgExHeavy">--</td></tr>
+                                    <tr class="bg-blue-100 border-t-2 border-slate-200"><td class="px-4 py-3 font-bold text-slate-800">Total Rainy Days (≥ 2.5 mm)</td><td class="px-4 py-3 text-right font-bold text-slate-900 text-lg mono" id="imdTotalRainy">--</td><td class="px-4 py-3 text-right font-bold text-blue-800 text-lg mono" id="avgTotalRainy">--</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Extreme Thresholds -->
+                <h2 class="text-lg font-bold text-slate-800 mb-3">Extreme Rainfall Thresholds (Cumulative Days)</h2>
+                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
+                    <div class="bg-white rounded-xl shadow-sm p-4 text-center border-b-4 border-yellow-400 stat-card">
+                        <p class="text-xs text-slate-500 font-bold uppercase">≥ 50 mm</p>
+                        <p class="text-2xl font-bold text-slate-800 mt-1 mono" id="thr50">--</p>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-sm p-4 text-center border-b-4 border-orange-400 stat-card">
+                        <p class="text-xs text-slate-500 font-bold uppercase">≥ 100 mm</p>
+                        <p class="text-2xl font-bold text-slate-800 mt-1 mono" id="thr100">--</p>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-sm p-4 text-center border-b-4 border-red-500 stat-card">
+                        <p class="text-xs text-slate-500 font-bold uppercase">≥ 150 mm</p>
+                        <p class="text-2xl font-bold text-slate-800 mt-1 mono" id="thr150">--</p>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-sm p-4 text-center border-b-4 border-fuchsia-600 stat-card">
+                        <p class="text-xs text-slate-500 font-bold uppercase">≥ 200 mm</p>
+                        <p class="text-2xl font-bold text-slate-800 mt-1 mono" id="thr200">--</p>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-sm p-4 text-center border-b-4 border-purple-800 stat-card">
+                        <p class="text-xs text-slate-500 font-bold uppercase">≥ 250 mm</p>
+                        <p class="text-2xl font-bold text-slate-800 mt-1 mono" id="thr250">--</p>
+                    </div>
+                </div>
+
+                <!-- Top 5 Events -->
+                <div>
+                    <h2 class="text-lg font-bold text-slate-800 mb-3">Top 5 Highest Daily Events & Avg Rainy Days (By Month)</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8" id="top5Grid"></div>
+                </div>
+
+                <!-- 10 Visualizations Grid -->
+                <div id="chartsGrid" class="grid grid-cols-1 gap-8 mt-8 scroll-mt-6">
+                    <div class="bg-white rounded-xl shadow-sm p-6"><div id="plotKDE" class="w-full h-[320px] sm:h-[400px]"></div></div>
+                    <div class="bg-white rounded-xl shadow-sm p-6"><div id="plotMonthlyAvg" class="w-full h-[320px] sm:h-[400px]"></div></div>
+                    <div class="bg-white rounded-xl shadow-sm p-6"><div id="plotTrend" class="w-full h-[320px] sm:h-[400px]"></div></div>
+                    <div class="bg-white rounded-xl shadow-sm p-6"><div id="plotCumulative" class="w-full h-[380px] sm:h-[500px]"></div></div>
+                    <div class="bg-white rounded-xl shadow-sm p-6"><div id="plotHeatmap" class="w-full h-[380px] sm:h-[500px]"></div></div>
+                    <div class="bg-white rounded-xl shadow-sm p-6"><div id="plot1" class="w-full h-[380px] sm:h-[500px]"></div></div>
+                    <div class="bg-white rounded-xl shadow-sm p-6"><div id="plot2" class="w-full h-[380px] sm:h-[500px]"></div></div>
+                    <div class="bg-white rounded-xl shadow-sm p-6"><div id="plot5" class="w-full h-[380px] sm:h-[500px]"></div></div> 
+                    <div class="bg-white rounded-xl shadow-sm p-6"><div id="plot3" class="w-full h-[380px] sm:h-[500px]"></div></div>
+                    <div class="bg-white rounded-xl shadow-sm p-6"><div id="plot4" class="w-full h-[380px] sm:h-[500px]"></div></div>
+                </div>
+            </div>
+
+            <!-- ENSO Phase Analysis Panel -->
+            <div id="ensoPanel" class="bg-white rounded-xl shadow-sm p-6 border-t-4 border-rose-500 scroll-mt-6">
+                <div class="flex justify-between items-start mb-4">
+                    <div>
+                        <h2 class="text-xl font-bold text-slate-800 mb-1">ENSO Phase Overlay (Built-in Data)</h2>
+                        <p class="text-sm text-slate-500">Analyze rainfall patterns against historical El Niño–Southern Oscillation (ENSO) phases. (Dataset limits up to 2023. Newer years shown as Pending).</p>
+                    </div>
+                    <a href="#top" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1">↑ Top</a>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 p-5 rounded-lg border border-slate-200 mb-6 max-w-2xl">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1 uppercase tracking-wide">Metric</label>
+                        <select id="ensoMetricSelect" class="bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-rose-500 focus:border-rose-500 block w-full p-2.5">
+                            <optgroup label="Volume Averages (mm)">
+                                <option value="ANN">Annual (ANN)</option>
+                                <option value="JF">Winter (JF)</option>
+                                <option value="MAM">Pre-Monsoon (MAM)</option>
+                                <option value="JJAS">SW Monsoon (JJAS)</option>
+                                <option value="OND" selected>NE Monsoon (OND)</option>
+                            </optgroup>
+                            <optgroup label="Extreme Thresholds (Days/Yr)">
+                                <option value="thr50">≥ 50 mm Events</option>
+                                <option value="thr100">≥ 100 mm Events</option>
+                                <option value="thr150">≥ 150 mm Events</option>
+                                <option value="thr200">≥ 200 mm Events</option>
+                                <option value="thr250">≥ 250 mm Events</option>
+                            </optgroup>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1 uppercase tracking-wide">ENSO Grouping</label>
+                        <select id="ensoGroupingSelect" class="bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-rose-500 focus:border-rose-500 block w-full p-2.5">
+                            <option value="simple">Simplified (El Niño / Neutral / La Niña)</option>
+                            <option value="detailed">Detailed (VSE/SE/ME/WE/Neutral/WL/ML/SL)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="ensoResultsPanel">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                            <h3 class="text-sm font-bold text-slate-800 mb-1">Composite Mean by ENSO Phase</h3>
+                            <p class="text-xs text-slate-500 mb-3">Error bars = &plusmn;1 std dev. Dashed line denotes long-term neutral baseline.</p>
+                            <div id="chartEnsoComposite" style="height:360px;"></div>
+                        </div>
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                            <h3 class="text-sm font-bold text-slate-800 mb-1">Standardized Anomaly & Macro Trend</h3>
+                            <p class="text-xs text-slate-500 mb-3">Bars denote exact year z-score (colored by ENSO). Line shows 5-yr rolling average.</p>
+                            <div id="chartEnsoAnomaly" style="height:360px;"></div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div class="bg-slate-50 border-b border-slate-200 px-6 py-4">
+                            <h3 class="text-sm font-bold text-slate-800">Year-by-Year Record</h3>
+                        </div>
+                        <div class="overflow-x-auto p-4 table-container max-h-[500px]">
+                            <div id="ensoYearTableWrap"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ================= ENTRY & LOGS TAB ================= -->
+        <div id="view-entry" class="hidden space-y-6">
+            <!-- Add Daily Reading -->
+            <div class="bg-white rounded-xl shadow-sm p-6 border border-slate-200">
+                <h2 class="text-lg font-bold text-slate-800 mb-4">Add / Update Reading</h2>
+                <div class="flex flex-wrap gap-4 items-end">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">Date</label>
+                        <input type="date" id="in-date" class="bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">Rainfall (mm)</label>
+                        <input type="number" id="in-mm" step="0.1" min="0" placeholder="0.0" class="bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm w-28 font-mono">
+                    </div>
+                    <div class="flex-1 min-w-[200px]">
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">Note (Optional)</label>
+                        <input type="text" id="in-note" placeholder="e.g. NEM deep depression, localized convective spell" class="bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm w-full">
+                    </div>
+                    <button onclick="addEntry()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-lg transition-colors shadow-sm">Save Entry</button>
+                </div>
+            </div>
+
+            <!-- CSV Management Toolbar -->
+            <div class="bg-white rounded-xl shadow-sm p-6 border border-slate-200 flex flex-wrap items-center justify-between gap-4">
+                <div class="flex items-center gap-4 flex-wrap">
+                    <label class="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 px-4 rounded-lg cursor-pointer transition-colors text-sm flex items-center gap-2 shadow-sm">
+                        Import CSV
+                        <input type="file" accept=".csv" id="csvFileInput" class="hidden" onchange="importCSV(event)">
+                    </label>
+                    <label class="flex items-center gap-2 text-xs text-slate-600 font-semibold cursor-pointer">
+                        <input type="checkbox" id="gapFillCheck" checked class="rounded text-teal-600 border-slate-300 focus:ring-teal-500">
+                        Fill missing dates as 0.0 mm
+                    </label>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="exportCSV()" class="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-2.5 px-4 rounded-lg transition-colors text-sm border border-slate-300 shadow-sm">Export CSV</button>
+                    <button onclick="clearAllData()" class="bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold py-2.5 px-4 rounded-lg transition-colors text-sm border border-rose-200 shadow-sm">Clear All</button>
+                </div>
+            </div>
+
+            <!-- Completeness Calendar -->
+            <div class="bg-white rounded-xl shadow-sm p-6 border border-slate-200">
+                <h3 class="font-bold text-slate-800 text-sm mb-1 uppercase tracking-wide">Data Completeness Calendar</h3>
+                <p class="text-xs text-slate-500 mb-4">Color-coded daily overview across logged years. Missing days appear as blank squares.</p>
+                <div id="cal-heatmap" class="overflow-x-auto"></div>
+            </div>
+
+            <!-- Raw Data Table -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="bg-slate-50 border-b border-slate-200 px-6 py-4 flex justify-between items-center">
+                    <h3 class="font-bold text-slate-800 text-sm uppercase tracking-wide">Log (<span id="log-count" class="mono font-bold">0</span> days)</h3>
+                    <input id="search-box" oninput="renderLogs()" placeholder="Filter date e.g. 2026-10..." class="bg-white border border-slate-300 text-xs rounded-lg px-3 py-1.5 w-48 outline-none focus:ring-1 focus:ring-blue-500">
+                </div>
+                <div class="overflow-y-auto max-h-[500px] table-container">
+                    <table class="w-full text-sm text-left text-slate-600">
+                        <thead class="text-xs text-slate-700 uppercase bg-slate-100 sticky top-0 shadow-sm">
+                            <tr><th class="px-6 py-3">Date</th><th class="px-6 py-3">Rainfall (mm)</th><th class="px-6 py-3">Note</th><th class="px-6 py-3 text-right">Actions</th></tr>
+                        </thead>
+                        <tbody id="log-tbody" class="divide-y divide-slate-100"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= SETTINGS TAB ================= -->
+        <div id="view-settings" class="hidden space-y-6">
+            <div class="bg-white rounded-xl shadow-sm p-6 border border-slate-200">
+                <h2 class="text-lg font-bold text-slate-800 mb-1">Thanjavur Baseline Monthly Normals (mm)</h2>
+                <p class="text-sm text-slate-500 mb-6">Pre-filled with IMD Thanjavur observatory baseline (1991–2020). These values calculate your seasonal expectations and cumulative normal curve.</p>
+                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6" id="normalsInputs"></div>
+                <button onclick="saveNormals()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-lg transition-colors shadow-sm">Save & Apply Normals</button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Quick Scroll to Top Floating Button -->
+    <button onclick="window.scrollTo({top: 0, behavior: 'smooth'})" class="fixed bottom-6 right-6 bg-blue-600 hover:bg-blue-700 text-white font-bold p-3 rounded-full shadow-lg z-50 transition-all flex items-center justify-center gap-1 group text-sm" title="Scroll to Top">
+        <span>↑</span><span class="max-w-0 overflow-hidden whitespace-nowrap group-hover:max-w-xs transition-all duration-300 text-xs">Top</span>
+    </button>
+
+<script>
+    // ==========================================
+    // SEED DATA, STORAGE KEYS & CONSTANTS
+    // ==========================================
+    const LS_ENTRIES = 'soorakottai_diary_entries_v10';
+    const LS_NORMALS = 'soorakottai_normals_v10';
+    
+    const DEFAULT_NORMALS = {1:10.2, 2:4.0, 3:6.9, 4:24.4, 5:55.0, 6:37.7, 7:46.9, 8:112.9, 9:124.4, 10:203.2, 11:288.7, 12:136.8};
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const seasonNames = ['JF', 'MAM', 'JJAS', 'OND'];
+    const customRainColors = [[0.0, '#fef08a'], [0.1, '#d9f99d'], [0.2, '#86efac'], [0.3, '#4ade80'], [0.4, '#2dd4bf'], [0.5, '#38bdf8'], [0.6, '#3b82f6'], [0.7, '#2563eb'], [0.8, '#4f46e5'], [0.9, '#9333ea'], [1.0, '#4a044e']];
+
+    const ENSO_DATA = {
+        1990: 'Neutral', 1991: 'El Nino (SE)', 1992: 'Neutral', 1993: 'Neutral', 1994: 'El Nino (ME)', 1995: 'La Nina (ML)',
+        1996: 'Neutral', 1997: 'El Nino (VSE)', 1998: 'La Nina (SL)', 1999: 'La Nina (SL)', 2000: 'La Nina (WL)', 
+        2001: 'Neutral', 2002: 'El Nino (ME)', 2003: 'Neutral', 2004: 'El Nino (WE)', 2005: 'La Nina (WL)',
+        2006: 'El Nino (WE)', 2007: 'La Nina (SL)', 2008: 'La Nina (WL)', 2009: 'El Nino (ME)', 2010: 'La Nina (SL)',
+        2011: 'La Nina (ML)', 2012: 'Neutral', 2013: 'Neutral', 2014: 'El Nino (WE)', 2015: 'El Nino (VSE)',
+        2016: 'La Nina (WL)', 2017: 'La Nina (WL)', 2018: 'El Nino (WE)', 2019: 'El Nino (WE)', 2020: 'La Nina (ML)',
+        2021: 'La Nina (ML)', 2022: 'La Nina (WL)', 2023: 'El Nino (SE)'
+    };
+    const PHASE_COLORS = { 'El Nino':'#dc2626', 'La Nina':'#2563eb', 'Neutral':'#94a3b8', 'Pending/TBD': '#cbd5e1' };
+
+    let entries = {};
+    let normals = {...DEFAULT_NORMALS};
+
+    function getSeason(m) { if (m <= 2) return 'JF'; if (m <= 5) return 'MAM'; if (m <= 9) return 'JJAS'; return 'OND'; }
+    function getSeasonName(s) { if (s === 'JF') return 'Winter (JF)'; if (s === 'MAM') return 'Pre-Monsoon (MAM)'; if (s === 'JJAS') return 'SW Monsoon (JJAS)'; return 'NE Monsoon (OND)'; }
+
+    // ==========================================
+    // INITIALIZATION & TAB CONTROLS
+    // ==========================================
+    function init() {
+        try { entries = JSON.parse(localStorage.getItem(LS_ENTRIES) || '{}'); } catch(e) { entries = {}; }
+        try { normals = JSON.parse(localStorage.getItem(LS_NORMALS) || 'null') || {...DEFAULT_NORMALS}; } catch(e) { normals = {...DEFAULT_NORMALS}; }
+        
+        const today = new Date();
+        document.getElementById('in-date').value = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+        
+        initTop5Grid();
+        renderNormalsInputs();
+        updateYearDropdowns();
+        renderAll();
+    }
+
+    function switchTab(tabId) {
+        ['explorer', 'entry', 'settings'].forEach(t => {
+            document.getElementById('view-' + t).classList.add('hidden');
+            let btn = document.getElementById('tabbtn-' + t);
+            btn.classList.remove('active', 'bg-blue-600', 'text-white');
+            btn.classList.add('text-slate-600');
+        });
+        document.getElementById('view-' + tabId).classList.remove('hidden');
+        let activeBtn = document.getElementById('tabbtn-' + tabId);
+        activeBtn.classList.add('active', 'bg-blue-600', 'text-white');
+        activeBtn.classList.remove('text-slate-600');
+        
+        if (tabId === 'explorer') renderAll();
+        if (tabId === 'entry') renderLogs();
+    }
+
+    function initTop5Grid() {
+        const grid = document.getElementById('top5Grid'); grid.innerHTML = '';
+        monthNames.forEach((m, idx) => {
+            grid.innerHTML += `<div class="bg-white rounded-xl shadow-sm p-4 border-t-4 border-blue-400">
+                <div class="flex justify-between items-center mb-2 border-b border-slate-100 pb-1">
+                    <h3 class="font-bold text-slate-800">${m}</h3>
+                    <span class="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded" id="avg-days-${idx+1}">-- days</span>
+                </div>
+                <ul id="top-${idx}" class="text-sm text-slate-600 divide-y divide-slate-50"><li class="py-1 italic text-slate-400">Awaiting data...</li></ul></div>`;
+        });
+    }
+
+    function renderNormalsInputs() {
+        const container = document.getElementById('normalsInputs'); container.innerHTML = '';
+        for(let i=1; i<=12; i++) {
+            container.innerHTML += `
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase">${monthNames[i-1]}</label>
+                    <input type="number" id="norm_${i}" value="${normals[i]}" step="0.1" class="w-full bg-slate-50 border border-slate-300 text-slate-900 text-xs rounded p-2 mt-1 font-mono outline-none focus:ring-1 focus:ring-blue-500">
+                </div>
+            `;
+        }
+    }
+
+    function saveNormals() {
+        for(let i=1; i<=12; i++) normals[i] = parseFloat(document.getElementById('norm_'+i).value) || 0;
+        localStorage.setItem(LS_NORMALS, JSON.stringify(normals));
+        alert("Normals saved successfully!");
+        renderAll();
+    }
+
+    function updateYearDropdowns() {
+        const startSel = document.getElementById('startYearSelect');
+        const endSel = document.getElementById('endYearSelect');
+        const snapSel = document.getElementById('snapshotYearSelect');
+        
+        const years = Array.from(new Set(Object.keys(entries).map(d => parseInt(d.split('-')[0], 10)))).sort((a,b)=>a-b);
+        
+        const curStart = startSel.value, curEnd = endSel.value, curSnap = snapSel.value;
+        startSel.innerHTML = ''; endSel.innerHTML = ''; snapSel.innerHTML = '';
+
+        if(years.length === 0) {
+            startSel.innerHTML = '<option>--</option>'; endSel.innerHTML = '<option>--</option>'; snapSel.innerHTML = '<option>--</option>';
+            return;
+        }
+
+        years.forEach(y => {
+            startSel.appendChild(new Option(y, y));
+            endSel.appendChild(new Option(y, y));
+            snapSel.appendChild(new Option(y, y));
+        });
+
+        startSel.value = years.includes(parseInt(curStart)) ? curStart : years[0];
+        endSel.value = years.includes(parseInt(curEnd)) ? curEnd : years[years.length - 1];
+        snapSel.value = years.includes(parseInt(curSnap)) ? curSnap : years[years.length - 1];
+    }
+
+    document.getElementById('startYearSelect').addEventListener('change', renderAll);
+    document.getElementById('endYearSelect').addEventListener('change', renderAll);
+    document.getElementById('ensoMetricSelect').addEventListener('change', renderAll);
+    document.getElementById('ensoGroupingSelect').addEventListener('change', renderAll);
+
+    // ==========================================
+    // DATA ENTRY, IMPORT & EXPORT
+    // ==========================================
+    function addEntry() {
+        const d = document.getElementById('in-date').value;
+        const mmRaw = document.getElementById('in-mm').value;
+        const note = document.getElementById('in-note').value.trim();
+        if (!d || mmRaw === '') return alert("Please select a date and enter the rainfall amount.");
+
+        entries[d] = { mm: Math.round(parseFloat(mmRaw) * 10) / 10, note: note };
+        saveEntries();
+        
+        document.getElementById('in-mm').value = '';
+        document.getElementById('in-note').value = '';
+        updateYearDropdowns();
+        renderLogs();
+        alert(`Saved ${d}: ${entries[d].mm} mm`);
+    }
+
+    function deleteEntry(d) {
+        if (confirm(`Delete entry for ${d}?`)) {
+            delete entries[d];
+            saveEntries();
+            updateYearDropdowns();
+            renderLogs();
+        }
+    }
+
+    function editEntry(d) {
+        document.getElementById('in-date').value = d;
+        document.getElementById('in-mm').value = entries[d].mm;
+        document.getElementById('in-note').value = entries[d].note || '';
+        switchTab('entry');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function saveEntries() { localStorage.setItem(LS_ENTRIES, JSON.stringify(entries)); }
+
+    function clearAllData() {
+        if (confirm("Are you sure you want to delete ALL data permanently?")) {
+            entries = {};
+            saveEntries();
+            updateYearDropdowns();
+            renderAll();
+            renderLogs();
+        }
+    }
+
+    function importCSV(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const doGapFill = document.getElementById('gapFillCheck').checked;
+
+        Papa.parse(file, {
+            header: true, skipEmptyLines: true,
+            transformHeader: h => h.replace(/^\uFEFF/g, '').trim().toLowerCase(),
+            complete: function(res) {
+                let datesSeen = [];
+                res.data.forEach(row => {
+                    let dStr = row.date || row.Date;
+                    let mRaw = row.mm || row.rainfall || row.MM;
+                    if (!dStr || mRaw === undefined || mRaw === null || mRaw === '') return;
+
+                    let parts = dStr.toString().split(/[-/]/);
+                    if (parts.length === 3) {
+                        let yr = parts[0].length === 4 ? parts[0] : parts[2];
+                        let mo = parts[0].length === 4 ? parts[1] : parts[1];
+                        let da = parts[0].length === 4 ? parts[2] : parts[0];
+                        let stdDate = `${yr}-${String(mo).padStart(2,'0')}-${String(da).padStart(2,'0')}`;
+                        
+                        let rain = parseFloat(mRaw);
+                        if (!isNaN(rain)) {
+                            entries[stdDate] = { mm: Math.round(rain * 10) / 10, note: (row.note || '').trim() };
+                            datesSeen.push(stdDate);
+                        }
+                    }
+                });
+
+                if (doGapFill && datesSeen.length > 0) {
+                    datesSeen.sort();
+                    let start = new Date(datesSeen[0]);
+                    let end = new Date(datesSeen[datesSeen.length - 1]);
+                    for (let dt = new Date(start); dt <= end; dt.setDate(dt.getDate() + 1)) {
+                        let ds = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+                        if (!entries[ds]) entries[ds] = { mm: 0.0, note: '' };
+                    }
+                }
+                saveEntries();
+                updateYearDropdowns();
+                renderAll();
+                renderLogs();
+                e.target.value = '';
+                alert("Dataset imported successfully!");
+            }
+        });
+    }
+
+    function exportCSV() {
+        let csv = "date,mm,note\n" + Object.keys(entries).sort().map(d => `${d},${entries[d].mm},"${(entries[d].note||'').replace(/"/g,'""')}"`).join('\n');
+        let a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([csv], {type: 'text/csv'}));
+        a.download = `Soorakkottai_Rainfall_${new Date().toISOString().slice(0,10)}.csv`;
+        a.click();
+    }
+
+    function renderLogs() {
+        const tbody = document.getElementById('log-tbody');
+        const filter = (document.getElementById('search-box')?.value || '').trim();
+        const dates = Object.keys(entries).sort().reverse().filter(d => d.includes(filter));
+        document.getElementById('log-count').innerText = Object.keys(entries).length;
+
+        tbody.innerHTML = dates.slice(0, 200).map(d => `
+            <tr class="hover:bg-slate-50 transition-colors">
+                <td class="px-6 py-2.5 mono text-slate-800 font-medium">${d}</td>
+                <td class="px-6 py-2.5 mono font-bold ${entries[d].mm > 0 ? 'text-blue-600' : 'text-slate-400'}">${entries[d].mm.toFixed(1)}</td>
+                <td class="px-6 py-2.5 text-slate-500 text-xs">${entries[d].note || ''}</td>
+                <td class="px-6 py-2.5 text-right whitespace-nowrap">
+                    <button onclick="editEntry('${d}')" class="text-blue-600 hover:text-blue-800 font-bold text-xs uppercase mr-3">Edit</button>
+                    <button onclick="deleteEntry('${d}')" class="text-rose-500 hover:text-rose-700 font-bold text-xs uppercase">Del</button>
+                </td>
+            </tr>
+        `).join('') || `<tr><td colspan="4" class="text-center p-8 text-slate-400 italic">No matching entries found.</td></tr>`;
+
+        renderCalendar();
+    }
+
+    function renderCalendar() {
+        const el = document.getElementById('cal-heatmap'); el.innerHTML = '';
+        const years = Array.from(new Set(Object.keys(entries).map(d => parseInt(d.split('-')[0], 10)))).sort((a,b)=>b-a);
+        
+        years.forEach(y => {
+            let html = `<div class="mb-3"><div class="mono text-[11px] text-slate-400 font-bold mb-1">${y}</div><div class="flex flex-wrap gap-[3px]">`;
+            for(let d = new Date(y, 0, 1); d <= new Date(y, 11, 31); d.setDate(d.getDate() + 1)) {
+                let ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                let color = '#e2e8f0';
+                if (ds in entries) {
+                    let m = entries[ds].mm;
+                    color = m === 0 ? '#cbd5e1' : m < 15.5 ? '#93c5fd' : m < 64.5 ? '#3b82f6' : m < 115.5 ? '#1d4ed8' : '#6b21a8';
+                }
+                html += `<div class="cal-cell" title="${ds}: ${ds in entries ? entries[ds].mm + ' mm' : 'No record'}" style="background-color: ${color}"></div>`;
+            }
+            html += `</div></div>`;
+            el.innerHTML += html;
+        });
+    }
+
+    // ==========================================
+    // STATS & ADVANCED PLOTLY VISUALIZATIONS
+    // ==========================================
+    const pLayout = { font: { family: 'Inter, sans-serif' }, margin: { l: 60, r: 30, t: 50, b: 50 }, plot_bgcolor: '#ffffff', paper_bgcolor: '#ffffff' };
+    const monthAxis = { categoryorder: 'array', categoryarray: monthNames, tickfont: { size: 13 } };
+    const boxConfig = { type: 'box', boxmean: true, marker: { size: 4 }, line: { width: 1.5 } };
+
+    function calculateKDE(dataPoints, resolution = 100) {
+        if (dataPoints.length === 0) return { x: [], y: [] };
+        let min = Math.min(...dataPoints) - 100, max = Math.max(...dataPoints) + 100;
+        if (min < 0) min = 0;
+        let step = (max - min) / resolution;
+        let kdeX = [], kdeY = [];
+        let m = dataPoints.reduce((a,b)=>a+b,0)/dataPoints.length;
+        let v = dataPoints.reduce((a,b)=>a+Math.pow(b-m,2),0)/dataPoints.length;
+        let h = 1.06 * Math.sqrt(v) * Math.pow(dataPoints.length, -0.2);
+        if (h <= 0) h = 10;
+        for (let i = 0; i <= resolution; i++) {
+            let x = min + (i * step), density = 0;
+            dataPoints.forEach(p => { density += (1 / Math.sqrt(2 * Math.PI)) * Math.exp(-0.5 * Math.pow((x - p) / h, 2)); });
+            kdeX.push(x); kdeY.push(density / (dataPoints.length * h));
+        }
+        return { x: kdeX, y: kdeY };
+    }
+
+    function calculateSpellTracker(allDates) {
+        if(allDates.length === 0) return;
+
+        let maxDaily = 0, maxDate = '--';
+        allDates.forEach(d => { if(entries[d].mm > maxDaily) { maxDaily = entries[d].mm; maxDate = d; } });
+
+        let spellStart = new Date('2021-08-20');
+        let latestEntryStr = allDates[allDates.length - 1];
+        let spellEnd = new Date(latestEntryStr);
+        
+        let currentSpellType = null; 
+        let currentSpellLen = 0;
+        let maxWet = {len: 0, start: '', end: ''};
+        let maxDry = {len: 0, start: '', end: ''};
+        let tempStart = '2021-08-20';
+        
+        for (let d = new Date(spellStart); d <= spellEnd; d.setDate(d.getDate() + 1)) {
+            let ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+            let val = entries[ds] ? entries[ds].mm : 0.0;
+            let isWet = val >= 2.5;
+            let type = isWet ? 'wet' : 'dry';
+            
+            if (currentSpellType === type) {
+                currentSpellLen++;
+            } else {
+                let prevDay = new Date(d.getTime() - 86400000);
+                let prevStr = `${prevDay.getFullYear()}-${String(prevDay.getMonth()+1).padStart(2,'0')}-${String(prevDay.getDate()).padStart(2,'0')}`;
+                
+                if (currentSpellType === 'wet' && currentSpellLen > maxWet.len) {
+                    maxWet = {len: currentSpellLen, start: tempStart, end: prevStr};
+                } else if (currentSpellType === 'dry' && currentSpellLen > maxDry.len) {
+                    maxDry = {len: currentSpellLen, start: tempStart, end: prevStr};
+                }
+                currentSpellType = type;
+                currentSpellLen = 1;
+                tempStart = ds;
+            }
+        }
+        
+        if (currentSpellType === 'wet' && currentSpellLen > maxWet.len) maxWet = {len: currentSpellLen, start: tempStart, end: latestEntryStr};
+        if (currentSpellType === 'dry' && currentSpellLen > maxDry.len) maxDry = {len: currentSpellLen, start: tempStart, end: latestEntryStr};
+        
+        let today = new Date();
+        let todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+        let daysSinceLast = Math.floor((new Date(todayStr) - new Date(latestEntryStr))/86400000);
+        
+        let liveSpell = '--';
+        if (daysSinceLast <= 1) {
+             liveSpell = `${currentSpellLen}d ${currentSpellType}`;
+        } else {
+             liveSpell = `no entry ${daysSinceLast}d`;
+        }
+
+        document.getElementById('spell-current').innerText = liveSpell;
+        const curEl = document.getElementById('spell-current');
+        if (liveSpell.includes('wet')) curEl.className = "text-lg font-bold mono text-teal-600";
+        else if (liveSpell.includes('dry')) curEl.className = "text-lg font-bold mono text-rose-600";
+        else curEl.className = "text-lg font-bold mono text-slate-500";
+
+        document.getElementById('spell-wet-len').innerText = maxWet.len > 0 ? `${maxWet.len} days` : '--';
+        document.getElementById('spell-wet-dates').innerText = maxWet.len > 0 ? `(${maxWet.start} to ${maxWet.end})` : '';
+        document.getElementById('spell-dry-len').innerText = maxDry.len > 0 ? `${maxDry.len} days` : '--';
+        document.getElementById('spell-dry-dates').innerText = maxDry.len > 0 ? `(${maxDry.start} to ${maxDry.end})` : '';
+        document.getElementById('spell-rec-val').innerText = maxDaily.toFixed(1);
+        document.getElementById('spell-rec-date').innerText = `(${maxDate})`;
+    }
+
+    function updateSnapshot() {
+        const snapYearStr = document.getElementById('snapshotYearSelect').value;
+        if(!snapYearStr || snapYearStr === '--') return;
+        const yNum = parseInt(snapYearStr, 10);
+        
+        const allDates = Object.keys(entries).sort();
+        const yrDates = allDates.filter(d => d.startsWith(snapYearStr));
+        
+        let ytdTotal = 0, maxDaily = 0, maxDate = '--';
+        let cumX = [], cumY = [];
+        let snapM = new Array(12).fill(0);
+        let snapM_LoggedDays = new Array(12).fill(0); 
+        
+        yrDates.forEach(d => {
+            let r = entries[d].mm;
+            ytdTotal += r;
+            cumX.push(d);
+            cumY.push(ytdTotal);
+            if(r > maxDaily) { maxDaily = r; maxDate = d; }
+            
+            let mIdx = parseInt(d.split('-')[1], 10) - 1;
+            snapM[mIdx] += r;
+            snapM_LoggedDays[mIdx]++;
+        });
+        
+        document.getElementById('lbl-ytd-total').innerText = `${snapYearStr} YTD TOTAL`;
+        document.getElementById('snap-ytd-total').innerText = ytdTotal.toFixed(1);
+        document.getElementById('snap-max-val').innerText = maxDaily.toFixed(1);
+        document.getElementById('snap-max-date').innerText = maxDate;
+        
+        let normalToDate = 0;
+        let lastMonthIdx = 0;
+        let lastLoggedDay = 0;
+        if (yrDates.length > 0) {
+            let lastDateStr = yrDates[yrDates.length - 1];
+            let parts = lastDateStr.split('-');
+            let lM = parseInt(parts[1], 10); 
+            lastLoggedDay = parseInt(parts[2], 10);
+            lastMonthIdx = lM;
+            
+            for (let i = 1; i < lM; i++) normalToDate += normals[i];
+            let daysInM = new Date(yNum, lM, 0).getDate();
+            normalToDate += normals[lM] * (lastLoggedDay / daysInM);
+        }
+        
+        document.getElementById('snap-normal-todate').innerText = normalToDate.toFixed(1);
+        let dep = normalToDate ? ((ytdTotal - normalToDate) / normalToDate) * 100 : 0;
+        
+        let depEl = document.getElementById('snap-departure');
+        depEl.innerText = (dep > 0 ? '+' : '') + dep.toFixed(1) + '%';
+        depEl.className = `text-2xl font-bold mt-1 mono ${dep >= 0 ? 'text-teal-600' : 'text-rose-600'}`;
+        
+        let depCard = document.getElementById('snap-card-departure');
+        depCard.className = `bg-slate-50 rounded-xl p-5 border-l-4 shadow-inner ${dep >= 0 ? 'border-teal-500' : 'border-rose-500'}`;
+        
+        // ----------------------------------------------------
+        // 4-Season Active Tracker (Current Year Panel)
+        // ----------------------------------------------------
+        const snapSeasonGrid = document.getElementById('snap-seasons-grid');
+        snapSeasonGrid.innerHTML = '';
+        
+        const seasonDefs = [
+            { id: 'JF', name: 'Winter (JF)', months: [1,2], border: 'border-sky-300', textColors: 'text-sky-600' },
+            { id: 'MAM', name: 'Pre-Monsoon (MAM)', months: [3,4,5], border: 'border-amber-400', textColors: 'text-amber-500' },
+            { id: 'JJAS', name: 'SW Monsoon (JJAS)', months: [6,7,8,9], border: 'border-emerald-500', textColors: 'text-emerald-600' },
+            { id: 'OND', name: 'NE Monsoon (OND)', months: [10,11,12], border: 'border-indigo-600', textColors: 'text-indigo-600' }
+        ];
+
+        seasonDefs.forEach(s => {
+            let sTotal = 0, sNormToDate = 0, hasStarted = false;
+            
+            s.months.forEach(m => {
+                if (m <= lastMonthIdx) {
+                    hasStarted = true;
+                    sTotal += snapM[m-1];
+                    if (m < lastMonthIdx) {
+                        sNormToDate += normals[m];
+                    } else if (m === lastMonthIdx) {
+                        let daysInM = new Date(yNum, m, 0).getDate();
+                        sNormToDate += normals[m] * (lastLoggedDay / daysInM);
+                    }
+                }
+            });
+
+            if (!hasStarted) {
+                snapSeasonGrid.innerHTML += `
+                    <div class="bg-white rounded-lg p-4 border border-slate-200 shadow-sm opacity-60">
+                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wide">${s.name}</p>
+                        <p class="text-lg font-bold text-slate-400 mt-2">Pending</p>
+                    </div>`;
+            } else {
+                let sDep = sNormToDate ? ((sTotal - sNormToDate) / sNormToDate) * 100 : 0;
+                snapSeasonGrid.innerHTML += `
+                    <div class="bg-white rounded-lg p-4 border border-slate-200 border-t-4 ${s.border} shadow-sm">
+                        <p class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">${s.name}</p>
+                        <div class="flex justify-between items-end mb-1">
+                            <div><p class="text-[10px] text-slate-400 font-bold uppercase">Total</p><p class="text-lg font-bold text-slate-800 mono">${sTotal.toFixed(1)} <span class="text-xs font-normal">mm</span></p></div>
+                            <div class="text-right"><p class="text-[10px] text-slate-400 font-bold uppercase">Norm To Date</p><p class="text-sm font-semibold text-slate-600 mono">${sNormToDate.toFixed(1)} <span class="text-xs font-normal">mm</span></p></div>
+                        </div>
+                        <p class="text-xs font-bold mt-1 ${sDep >= 0 ? 'text-teal-600' : 'text-rose-600'}">${sDep > 0 ? '+' : ''}${sDep.toFixed(1)}% Departure</p>
+                    </div>`;
+            }
+        });
+
+        // ----------------------------------------------------
+        // 1. Triple-Line Cumulative Chart
+        // ----------------------------------------------------
+        let normX = [], normY = [], runNorm = 0;
+        for(let i=1; i<=12; i++) {
+            runNorm += normals[i];
+            let lastDay = new Date(yNum, i, 0).getDate();
+            normX.push(`${yNum}-${String(i).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`);
+            normY.push(runNorm);
+        }
+
+        const nowY = new Date().getFullYear();
+        let allYearsArray = Array.from(new Set(allDates.map(d => parseInt(d.split('-')[0], 10)))).sort((a,b)=>a-b);
+        let maxCompleted = allYearsArray.filter(y => y < nowY).pop() || 2025;
+        const localBaseStartYear = 2022;
+        const localBaseEndYear = Math.max(localBaseStartYear, maxCompleted);
+        
+        document.getElementById('localBaseTitle').innerText = `${localBaseStartYear}-${localBaseEndYear}`;
+
+        let localNormM = new Array(12).fill(0);
+        let monthlyTotalsHistorical = {};
+        
+        allDates.forEach(d => {
+            let parts = d.split('-');
+            let y = parseInt(parts[0], 10);
+            let m = parseInt(parts[1], 10);
+            if (y >= localBaseStartYear && y <= localBaseEndYear) {
+                if (!monthlyTotalsHistorical[y]) monthlyTotalsHistorical[y] = {};
+                monthlyTotalsHistorical[y][m] = (monthlyTotalsHistorical[y][m] || 0) + entries[d].mm;
+            }
+        });
+
+        for (let m = 1; m <= 12; m++) {
+            let sum = 0, count = 0;
+            for (let y = localBaseStartYear; y <= localBaseEndYear; y++) {
+                if (monthlyTotalsHistorical[y] && monthlyTotalsHistorical[y][m] !== undefined) {
+                    sum += monthlyTotalsHistorical[y][m];
+                    count++;
+                }
+            }
+            localNormM[m-1] = count > 0 ? sum / count : 0;
+        }
+
+        let localNormCumY = [], runLocalNorm = 0;
+        for(let i=0; i<12; i++) {
+            runLocalNorm += localNormM[i];
+            localNormCumY.push(runLocalNorm);
+        }
+        
+        let cumTraces = [
+            { x: cumX, y: cumY, type: 'scatter', mode: 'lines', name: `${snapYearStr} Accumulation`, line: {color: '#2563eb', width: 3} },
+            { x: normX, y: normY, type: 'scatter', mode: 'lines+markers', name: 'Thanjavur Baseline', line: {color: '#d97706', width: 2, dash: 'dot'} },
+            { x: normX, y: localNormCumY, type: 'scatter', mode: 'lines+markers', name: `Local Avg (${localBaseStartYear}-${localBaseEndYear})`, line: {color: '#8b5cf6', width: 2, dash: 'dot'} }
+        ];
+        Plotly.newPlot('plotCumulativeYTD', cumTraces, { ...pLayout, margin:{t:20,l:40,r:20,b:40}, showlegend: true, legend:{orientation:'h', y:-0.15}, xaxis: { tickformat: '%b %d' } }, {responsive: true});
+
+        // ----------------------------------------------------
+        // 2. Current Year Monthly vs Normal (Side-by-Side Charts)
+        // ----------------------------------------------------
+        
+        // Thanjavur Comparison
+        let thanjavurTraces = [
+            { x: monthNames, y: snapM, type: 'bar', name: 'Recorded', marker: { color: '#38bdf8' }, text: snapM.map(v => v>0 ? v.toFixed(1) : ''), textposition: 'outside' },
+            { x: monthNames, y: Object.values(normals), type: 'scatter', mode: 'lines+markers', name: 'Thanjavur Normal', line: {color: '#d97706', width: 2, dash: 'dot'}, marker: {size: 6} }
+        ];
+        Plotly.newPlot('plotMonthVsThanjavur', thanjavurTraces, { ...pLayout, margin:{t:20,l:40,r:20,b:40}, barmode: 'group', showlegend: true, legend:{orientation:'h', y:-0.15} }, {responsive: true});
+
+        // Local Average Comparison
+        let localTraces = [
+            { x: monthNames, y: snapM, type: 'bar', name: 'Recorded', marker: { color: '#10b981' }, text: snapM.map(v => v>0 ? v.toFixed(1) : ''), textposition: 'outside' },
+            { x: monthNames, y: localNormM, type: 'scatter', mode: 'lines+markers', name: `Local Avg (${localBaseStartYear}-${localBaseEndYear})`, line: {color: '#8b5cf6', width: 2, dash: 'dot'}, marker: {size: 6} }
+        ];
+        Plotly.newPlot('plotMonthVsLocal', localTraces, { ...pLayout, margin:{t:20,l:40,r:20,b:40}, barmode: 'group', showlegend: true, legend:{orientation:'h', y:-0.15} }, {responsive: true});
+    }
+
+    function renderAll() {
+        if(Object.keys(entries).length === 0) return;
+        
+        const allDates = Object.keys(entries).sort();
+        if(allDates.length > 0) {
+            document.getElementById('climatology-note').innerText = `Strict Climatology: Incomplete years are safely ignored to prevent skewed averages. Valid complete seasons are preserved. Data range: ${allDates[0]} to ${allDates[allDates.length-1]}.`;
+        }
+
+        calculateSpellTracker(allDates);
+        updateSnapshot();
+
+        const startY = parseInt(document.getElementById('startYearSelect').value, 10);
+        const endY = parseInt(document.getElementById('endYearSelect').value, 10);
+        const dates = allDates.filter(d => {
+            let y = parseInt(d.split('-')[0], 10);
+            return y >= startY && y <= endY;
+        });
+
+        if (dates.length === 0) return;
+
+        // Climatology State Arrays
+        let monthlyTotals = {}, annualTotalsObj = {}, seasonalTotalsByYear = {};
+        let imdCounts = { light:0, mod:0, heavy:0, vHeavy:0, eHeavy:0, exHeavy:0, totalRainy:0 };
+        let thrCounts = { t50:0, t100:0, t150:0, t200:0, t250:0 };
+        let monthRecords = Array.from({length: 12}, () => []);
+        let dailyDataByYear = {}, daysCountByYear = {}, daysCountBySeason = {}, daysCountByMonth = {};
+        let monthlyDailyX = [], monthlyDailyY = [];
+
+        const EXPECTED_SEASON = {
+            'JF': y => new Date(y, 1, 0).getDate() + new Date(y, 2, 0).getDate(),
+            'MAM': y => new Date(y, 3, 0).getDate() + new Date(y, 4, 0).getDate() + new Date(y, 5, 0).getDate(),
+            'JJAS': y => new Date(y, 6, 0).getDate() + new Date(y, 7, 0).getDate() + new Date(y, 8, 0).getDate() + new Date(y, 9, 0).getDate(),
+            'OND': y => new Date(y, 10, 0).getDate() + new Date(y, 11, 0).getDate() + new Date(y, 12, 0).getDate()
+        };
+
+        dates.forEach(d => {
+            let r = entries[d].mm;
+            let parts = d.split('-').map(Number);
+            let y = parts[0], m = parts[1], day = parts[2];
+            let s = getSeason(m);
+
+            if (r >= 50) thrCounts.t50++; if (r >= 100) thrCounts.t100++; if (r >= 150) thrCounts.t150++; if (r >= 200) thrCounts.t200++; if (r >= 250) thrCounts.t250++;
+            if (r > 0) monthRecords[m - 1].push({ date: d, rain: r });
+            if (r >= 2.5) {
+                imdCounts.totalRainy++;
+                if (r < 15.6) imdCounts.light++; else if (r < 64.5) imdCounts.mod++; else if (r < 115.6) imdCounts.heavy++;
+                else if (r < 204.5) imdCounts.vHeavy++; else if (r < 244.5) imdCounts.eHeavy++; else imdCounts.exHeavy++;
+            }
+
+            monthlyDailyX.push(monthNames[m - 1]); monthlyDailyY.push(r);
+
+            if (!monthlyTotals[y]) monthlyTotals[y] = {};
+            monthlyTotals[y][m] = (monthlyTotals[y][m] || 0) + r;
+
+            annualTotalsObj[y] = (annualTotalsObj[y] || 0) + r;
+
+            if (!seasonalTotalsByYear[y]) seasonalTotalsByYear[y] = { 'JF': 0, 'MAM': 0, 'JJAS': 0, 'OND': 0 };
+            seasonalTotalsByYear[y][s] += r;
+
+            if (!dailyDataByYear[y]) dailyDataByYear[y] = Array.from({length: 366}, () => 0);
+            let baseDate = new Date(2000, m - 1, day);
+            let dayOfYear = Math.floor((baseDate - new Date(2000, 0, 0)) / (1000 * 60 * 60 * 24)) - 1; 
+            if (dayOfYear >= 0 && dayOfYear <= 365) dailyDataByYear[y][dayOfYear] += r;
+
+            daysCountByYear[y] = (daysCountByYear[y] || 0) + 1;
+            if(!daysCountBySeason[y]) daysCountBySeason[y] = {JF:0, MAM:0, JJAS:0, OND:0};
+            daysCountBySeason[y][s]++;
+
+            if(!daysCountByMonth[y]) daysCountByMonth[y] = {};
+            daysCountByMonth[y][m] = (daysCountByMonth[y][m] || 0) + 1;
+        });
+
+        // Strict Annual Filter (>= 360 logged days)
+        let annualTotalsArr = [], trendlineX = [], trendlineY = [];
+        let annualDailyX = [], annualDailyY = [];
+        Object.keys(annualTotalsObj).sort((a,b)=>a-b).forEach(yrStr => {
+            let yNum = parseInt(yrStr);
+            let expDays = (yNum % 4 === 0 && yNum % 100 !== 0) || (yNum % 400 === 0) ? 366 : 365;
+            if ((daysCountByYear[yNum] || 0) >= expDays - 5) {
+                annualTotalsArr.push({ year: yNum, total: annualTotalsObj[yNum] });
+                trendlineX.push(yNum); trendlineY.push(annualTotalsObj[yNum]);
+            }
+        });
+
+        dates.forEach(d => {
+            let y = parseInt(d.split('-')[0], 10);
+            let expDays = (y % 4 === 0 && y % 100 !== 0) || (y % 400 === 0) ? 366 : 365;
+            if ((daysCountByYear[y] || 0) >= expDays - 5) {
+                annualDailyX.push(y); annualDailyY.push(entries[d].mm);
+            }
+        });
+
+        const sumAllYears = annualTotalsArr.reduce((acc, curr) => acc + curr.total, 0);
+        const meanAnnual = annualTotalsArr.length > 0 ? (sumAllYears / annualTotalsArr.length) : 0;
+
+        // Strict Monthly Averages
+        let monthlyAvgY = [];
+        for (let i = 1; i <= 12; i++) {
+            let sumForMonth = 0, countForMonth = 0;
+            for(let yr = startY; yr <= endY; yr++) { 
+                if (monthlyTotals[yr] && monthlyTotals[yr][i] !== undefined) {
+                    let exp = new Date(yr, i, 0).getDate();
+                    if ((daysCountByMonth[yr] && daysCountByMonth[yr][i] || 0) >= exp - 2) {
+                        sumForMonth += monthlyTotals[yr][i];
+                        countForMonth++;
+                    }
+                }
+            }
+            monthlyAvgY.push(countForMonth > 0 ? (sumForMonth / countForMonth) : 0);
+        }
+
+        // Strict Seasonal Averages
+        let seasonalAverages = { 'JF':0, 'MAM':0, 'JJAS':0, 'OND':0 };
+        ['JF', 'MAM', 'JJAS', 'OND'].forEach(s => {
+            let sum = 0, count = 0;
+            for(let yr = startY; yr <= endY; yr++) {
+                if(daysCountBySeason[yr] && seasonalTotalsByYear[yr]) {
+                    let logged = daysCountBySeason[yr][s] || 0;
+                    if (logged >= EXPECTED_SEASON[s](yr) - 3) {
+                        sum += seasonalTotalsByYear[yr][s];
+                        count++;
+                    }
+                }
+            }
+            seasonalAverages[s] = count > 0 ? sum / count : 0;
+        });
+
+        // Distribution Stats
+        const sortedAnnual = [...annualTotalsArr].sort((a, b) => a.total - b.total);
+        const median = sortedAnnual.length > 0 ? (sortedAnnual.length % 2 !== 0 ? sortedAnnual[Math.floor(sortedAnnual.length / 2)].total : (sortedAnnual[Math.floor(sortedAnnual.length / 2) - 1].total + sortedAnnual[Math.floor(sortedAnnual.length / 2)].total) / 2) : 0;
+        
+        let numSkew = 0, numKurt = 0, varianceSq = 0;
+        annualTotalsArr.forEach(item => { 
+            const diff = item.total - meanAnnual; 
+            numSkew += Math.pow(diff, 3); numKurt += Math.pow(diff, 4); varianceSq += Math.pow(diff, 2); 
+        });
+        const stdDev = sortedAnnual.length > 1 ? Math.sqrt(varianceSq / annualTotalsArr.length) : 0;
+        let skew = 0, kurt = 0, cv = 0;
+        if (stdDev > 0 && annualTotalsArr.length > 2) { 
+            skew = (numSkew / annualTotalsArr.length) / Math.pow(stdDev, 3); 
+            kurt = (numKurt / annualTotalsArr.length) / Math.pow(stdDev, 4) - 3; 
+            cv = (stdDev / meanAnnual) * 100;
+        }
+        const q1 = sortedAnnual[Math.floor(sortedAnnual.length * 0.25)] ? sortedAnnual[Math.floor(sortedAnnual.length * 0.25)].total : 0;
+        const q3 = sortedAnnual[Math.floor(sortedAnnual.length * 0.75)] ? sortedAnnual[Math.floor(sortedAnnual.length * 0.75)].total : 0;
+        const iqr = q3 - q1;
+
+        const maxTotal = sortedAnnual.length > 0 ? sortedAnnual[sortedAnnual.length-1].total : 0; 
+        const maxYear = sortedAnnual.length > 0 ? sortedAnnual[sortedAnnual.length-1].year : '--';
+        const minTotal = sortedAnnual.length > 0 ? sortedAnnual[0].total : 0; 
+        const minYear = sortedAnnual.length > 0 ? sortedAnnual[0].year : '--';
+        const medianYear = sortedAnnual.length > 0 ? sortedAnnual[Math.floor(sortedAnnual.length / 2)].year : '--';
+
+        const getCumArrayFull = yr => {
+            if (!dailyDataByYear[yr]) return [];
+            let cum = [], run = 0;
+            dailyDataByYear[yr].forEach(r => { run += r; cum.push(run); });
+            return cum;
+        };
+
+        const cumMax = maxYear !== '--' ? getCumArrayFull(maxYear) : [];
+        const cumMin = minYear !== '--' ? getCumArrayFull(minYear) : [];
+        const cumMedian = medianYear !== '--' ? getCumArrayFull(medianYear) : [];
+
+        // DOM Update helper
+        const updateUI = (id, val) => { const el = document.getElementById(id); if (el) el.innerText = val; };
+
+        // Normal Sums Calculate
+        const nJF = normals[1] + normals[2];
+        const nMAM = normals[3] + normals[4] + normals[5];
+        const nJJAS = normals[6] + normals[7] + normals[8] + normals[9];
+        const nOND = normals[10] + normals[11] + normals[12];
+        const nANN = Object.values(normals).reduce((a,b)=>a+b,0);
+
+        updateUI('normANN', nANN.toFixed(1));
+        const depANN = nANN ? ((meanAnnual - nANN) / nANN) * 100 : 0;
+        let elAnn = document.getElementById('pctANN');
+        elAnn.innerText = annualTotalsArr.length > 0 ? (depANN > 0 ? '+' : '') + depANN.toFixed(1) + '%' : '--%';
+        elAnn.className = depANN >= 0 ? 'text-teal-600 text-xs font-bold' : 'text-rose-600 text-xs font-bold';
+
+        updateUI('valMean', annualTotalsArr.length > 0 ? meanAnnual.toFixed(1) : '--');
+        updateUI('valMedian', annualTotalsArr.length > 0 ? median.toFixed(1) : '--');
+        updateUI('valMax', annualTotalsArr.length > 0 ? maxTotal.toFixed(1) : '--'); updateUI('valMaxYear', maxYear);
+        updateUI('valMin', annualTotalsArr.length > 0 ? minTotal.toFixed(1) : '--'); updateUI('valMinYear', minYear);
+        updateUI('valSkew', annualTotalsArr.length > 2 ? skew.toFixed(2) : '--');
+        updateUI('valKurt', annualTotalsArr.length > 2 ? kurt.toFixed(2) : '--');
+        updateUI('valSD', annualTotalsArr.length > 1 ? stdDev.toFixed(1) : '--');
+        updateUI('valCV', annualTotalsArr.length > 1 ? cv.toFixed(1)+'%' : '--');
+        updateUI('valIQR', annualTotalsArr.length > 0 ? iqr.toFixed(1) : '--');
+
+        const setSeasonUI = (season, avg, norm) => {
+            updateUI(`norm${season}`, norm.toFixed(1));
+            updateUI(`avg${season}`, avg > 0 ? avg.toFixed(1) : '--');
+            const el = document.getElementById(`pct${season}`);
+            if (!norm || avg === 0) { el.innerText = '--%'; el.className = 'text-sm mt-1 font-bold text-slate-400'; return; }
+            let dep = ((avg - norm) / norm) * 100;
+            el.innerText = (dep > 0 ? '+' : '') + dep.toFixed(1) + '%';
+            el.className = `text-sm mt-1 font-bold ${dep >= 0 ? 'text-teal-600' : 'text-rose-600'}`;
+        };
+
+        setSeasonUI('JF', seasonalAverages['JF'], nJF);
+        setSeasonUI('MAM', seasonalAverages['MAM'], nMAM);
+        setSeasonUI('JJAS', seasonalAverages['JJAS'], nJJAS);
+        setSeasonUI('OND', seasonalAverages['OND'], nOND);
+
+        ['light','mod','heavy','vHeavy','eHeavy','exHeavy','totalRainy'].forEach(c => { updateUI('imd' + c.charAt(0).toUpperCase() + c.slice(1), imdCounts[c]); });
+        ['t50','t100','t150','t200','t250'].forEach(t => { updateUI(t.replace('t','thr'), thrCounts[t]); });
+
+        // Calculate Average Rainy Days (>= 2.5mm) per month across valid years
+        let avgDaysPerMonth = Array(12).fill(0);
+        let allYearsUnique = Array.from(new Set(dates.map(d => parseInt(d.split('-')[0], 10))));
+        
+        let totalRainySum = 0;
+        for (let m = 1; m <= 12; m++) {
+            let validYCount = 0;
+            let mDaysTotal = 0;
+            allYearsUnique.forEach(y => {
+                if (y > 2021 || (y === 2021 && m >= 9)) {
+                    validYCount++;
+                    let c = 0;
+                    dates.filter(d => d.startsWith(`${y}-${String(m).padStart(2,'0')}`)).forEach(d => {
+                        if (entries[d].mm >= 2.5) c++;
+                    });
+                    mDaysTotal += c;
+                }
+            });
+            let mAvg = validYCount > 0 ? (mDaysTotal / validYCount) : 0;
+            avgDaysPerMonth[m-1] = mAvg;
+            totalRainySum += mAvg;
+            updateUI(`avg-days-${m}`, mAvg.toFixed(1) + ' days');
+            updateUI(`avgLight`, '--'); // Kept blank to avoid miscalculation logic for subtypes
+        }
+        updateUI('avgTotalRainy', totalRainySum.toFixed(1));
+
+        for (let m = 0; m < 12; m++) {
+            let top5 = monthRecords[m].sort((a, b) => b.rain - a.rain).slice(0, 5);
+            let listHtml = top5.length === 0 ? '<li class="py-2 italic text-slate-400">No events</li>' : top5.map((item, idx) => `<li class="${idx === 0 ? 'py-1.5 flex justify-between font-bold text-slate-800' : 'py-1.5 flex justify-between'}"><span>${idx + 1}. ${item.date}</span><span class="text-blue-700 font-mono font-bold">${item.rain.toFixed(1)}</span></li>`).join('');
+            document.getElementById(`top-${m}`).innerHTML = listHtml;
+        }
+
+        // ================= PLOTLY VISUALIZATIONS =================
+        // 1. KDE
+        let kdeA = calculateKDE(trendlineY);
+        let kdeTraces = [
+            { x: trendlineY, type: 'histogram', name: 'Annual Totals', opacity: 0.4, marker: {color: '#3b82f6'}, xbins: {size: 100}, histnorm: 'probability density' },
+            { x: kdeA.x, y: kdeA.y, type: 'scatter', mode: 'lines', name: `KDE Profile`, line: {color: '#1d4ed8', width: 2.5} }
+        ];
+        Plotly.newPlot('plotKDE', kdeTraces, { ...pLayout, title: { text: `Annual Rainfall Probability & KDE Profile`, font: { size: 18 } }, barmode: 'overlay', showlegend: false }, {responsive: true});
+
+        // 2. Monthly Average vs Normal
+        let monthlyTraces = [
+            { x: monthNames, y: monthlyAvgY, type: 'bar', name: 'Recorded Average', marker: { color: monthlyAvgY, colorscale: customRainColors, cmin: 0, cmax: 300, line: { color: '#334155', width: 1 } }, text: monthlyAvgY.map(v => v>0 ? v.toFixed(1) : ''), textposition: 'outside' },
+            { x: monthNames, y: Object.values(normals), type: 'scatter', mode: 'lines+markers', name: 'Thanjavur Baseline', line: {color: '#d97706', width: 3, dash: 'dot'}, marker: {size: 8} }
+        ];
+        Plotly.newPlot('plotMonthlyAvg', monthlyTraces, { ...pLayout, barmode: 'group', title: { text: `Average Monthly Rainfall vs Thanjavur Baseline`, font: { size: 18 } }, showlegend: true, legend:{orientation:'h', y:-0.15} }, {responsive: true});
+
+        // 3. Trendline & 5-Yr Rolling Avg
+        let rollYA = trendlineY.map((_, i, arr) => i < 4 ? null : (arr[i]+arr[i-1]+arr[i-2]+arr[i-3]+arr[i-4])/5);
+        let trendTraces = [
+            { x: trendlineX, y: trendlineY, type: 'scatter', mode: 'lines+markers', name: 'Annual Total', opacity: 0.5, line: {color: '#3b82f6', width: 2, dash: 'dot'}, marker: {size: 5} },
+            { x: trendlineX, y: rollYA, type: 'scatter', mode: 'lines', name: `5-Yr Avg`, line: {color: '#1d4ed8', width: 4} }
+        ];
+        Plotly.newPlot('plotTrend', trendTraces, { ...pLayout, title: { text: `Total Annual Rainfall Trend & 5-Year Rolling Average`, font: { size: 18 } }, showlegend: true, legend:{orientation:'h', y:-0.15} }, {responsive: true});
+
+        // 4. Cumulative Mass Curves vs Normal (Historical Range Plot)
+        let histCumX = []; for(let i=1; i<=12; i++) { let lastDay = new Date(2000, i, 0).getDate(); histCumX.push(`2000-${String(i).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`); }
+        let histNormY = [], histRunSum = 0;
+        for(let i=1; i<=12; i++) { histRunSum += normals[i]; histNormY.push(histRunSum); }
+
+        let histCumTraces = [ { x: histCumX, y: histNormY, type: 'scatter', mode: 'lines+markers', name: `Thanjavur Normal`, line: {color: '#d97706', width: 2, dash: 'dot'} } ];
+        
+        let cumXFull = []; for(let i=1; i<=366; i++) { cumXFull.push(`2000-${String(new Date(2000, 0, i).getMonth()+1).padStart(2,'0')}-${String(new Date(2000, 0, i).getDate()).padStart(2,'0')}`); }
+        if (cumMedian.length > 0) histCumTraces.push({ x: cumXFull.slice(0, cumMedian.length), y: cumMedian, type: 'scatter', mode: 'lines', name: `Median Year (${medianYear})`, line: {color: '#94a3b8', width: 3} });
+        if (cumMax.length > 0) histCumTraces.push({ x: cumXFull.slice(0, cumMax.length), y: cumMax, type: 'scatter', mode: 'lines', name: `Wettest Year (${maxYear})`, line: {color: '#2563eb', width: 3} });
+        if (cumMin.length > 0) histCumTraces.push({ x: cumXFull.slice(0, cumMin.length), y: cumMin, type: 'scatter', mode: 'lines', name: `Driest Year (${minYear})`, line: {color: '#ef4444', width: 3} });
+        
+        Plotly.newPlot('plotCumulative', histCumTraces, { ...pLayout, title: { text: `Historical Range Accumulation vs Normal`, font: { size: 18 } }, xaxis: { tickformat: '%b %d', title: 'Day of Year' }, yaxis: { title: 'Cumulative Rainfall (mm)' }, showlegend: true, legend:{orientation:'h', y:-0.15} }, {responsive: true});
+
+        // 5. Monthly Heatmap
+        let yearsHeatmap = Array.from({length: endY - startY + 1}, (_, i) => startY + i);
+        let zValues = yearsHeatmap.map(y => Array.from({length: 12}, (_, i) => (monthlyTotals[y] && monthlyTotals[y][i+1]) ? monthlyTotals[y][i+1] : 0));
+        Plotly.newPlot('plotHeatmap', [{ z: zValues, x: monthNames, y: yearsHeatmap, type: 'heatmap', colorscale: customRainColors, zmax: 300 }], { ...pLayout, title: { text: `Monthly Rainfall Heatmap (${startY}-${endY})`, font: { size: 18 } }, yaxis: {type: 'category', autorange: 'reversed'} }, {responsive: true});
+
+        // 6-10. Box Plots
+        let seasonTotalsX = [], seasonTotalsY = [], monthTotalsX = [], monthTotalsY = [];
+        Object.keys(seasonalTotalsByYear).forEach(yr => { seasonNames.forEach(s => { seasonTotalsX.push(s); seasonTotalsY.push(seasonalTotalsByYear[yr][s]); }); });
+        Object.keys(monthlyTotals).forEach(yr => { Object.keys(monthlyTotals[yr]).forEach(m => { monthTotalsX.push(monthNames[parseInt(m) - 1]); monthTotalsY.push(monthlyTotals[yr][m]); }); });
+
+        Plotly.newPlot('plot1', [{...boxConfig, marker: { color: '#3b82f6' }, x: monthlyDailyX, y: monthlyDailyY}], { ...pLayout, title: { text: `Monthly Daily Rainfall Distribution`, font: { size: 18 } }, xaxis: monthAxis, showlegend: false }, {responsive: true});
+        Plotly.newPlot('plot2', [{...boxConfig, marker: { color: '#10b981' }, x: monthTotalsX, y: monthTotalsY}], { ...pLayout, title: { text: `Monthly Rainfall Totals Across Years`, font: { size: 18 } }, xaxis: monthAxis, showlegend: false }, {responsive: true});
+        Plotly.newPlot('plot5', [{...boxConfig, marker: { color: '#ec4899' }, x: seasonTotalsX, y: seasonTotalsY}], { ...pLayout, title: { text: `Seasonal Rainfall Totals Across Years`, font: { size: 18 } }, xaxis: { categoryorder: 'array', categoryarray: seasonNames }, showlegend: false }, {responsive: true});
+        Plotly.newPlot('plot3', [{...boxConfig, marker: { color: '#8b5cf6' }, x: annualDailyX, y: annualDailyY}], { ...pLayout, title: { text: `Annual Daily Rainfall Distribution`, font: { size: 18 } }, showlegend: false }, {responsive: true});
+        Plotly.newPlot('plot4', [{...boxConfig, marker: { color: '#f59e0b', size: 5 }, y: trendlineY}], { ...pLayout, title: { text: `Annual Rainfall Totals Distribution`, font: { size: 18 } }, xaxis: { showticklabels: false }, showlegend: false }, {responsive: true});
+
+        // 11. ENSO Analysis Panel
+        renderEnsoSection();
+    }
+
+    function renderEnsoSection() {
+        const metric = document.getElementById('ensoMetricSelect').value;
+        const grouping = document.getElementById('ensoGroupingSelect').value;
+        const isCount = metric.startsWith('thr');
+        const unit = isCount ? 'Days' : 'mm';
+
+        const years = Array.from(new Set(Object.keys(entries).map(d => parseInt(d.split('-')[0], 10)))).sort((a,b)=>a-b);
+        if (years.length === 0) return;
+
+        let ensoSummary = new Map();
+        years.forEach(y => {
+            let mTotals = Array(13).fill(0);
+            let tCounts = { thr50:0, thr100:0, thr150:0, thr200:0, thr250:0 };
+            
+            Object.keys(entries).filter(d => d.startsWith(String(y))).forEach(d => {
+                let m = parseInt(d.split('-')[1], 10);
+                let r = entries[d].mm;
+                mTotals[m] += r;
+                if(r >= 50) tCounts.thr50++; if(r >= 100) tCounts.thr100++;
+                if(r >= 150) tCounts.thr150++; if(r >= 200) tCounts.thr200++; if(r >= 250) tCounts.thr250++;
+            });
+
+            ensoSummary.set(y, {
+                JF: mTotals[1] + mTotals[2],
+                MAM: mTotals[3] + mTotals[4] + mTotals[5],
+                JJAS: mTotals[6] + mTotals[7] + mTotals[8] + mTotals[9],
+                OND: mTotals[10] + mTotals[11] + mTotals[12],
+                ANN: mTotals.reduce((a,b)=>a+b,0),
+                ...tCounts
+            });
+        });
+
+        const values = years.map(y => ensoSummary.get(y)[metric]);
+        let ensoInfo = [], byGroup = new Map();
+        
+        years.forEach((y, i) => {
+            let ensoStr = ENSO_DATA[y] || 'Pending/TBD';
+            let isNino = ensoStr.includes('El Nino');
+            let isNina = ensoStr.includes('La Nina');
+            
+            let detailed = ensoStr;
+            let simple = isNino ? 'El Nino' : (isNina ? 'La Nina' : (ensoStr === 'Neutral' ? 'Neutral' : 'Pending/TBD'));
+            let group = grouping === 'simple' ? simple : detailed;
+            
+            ensoInfo.push({ label: ensoStr, detailed, simple, group });
+
+            if (group !== 'Pending/TBD') {
+                if (!byGroup.has(group)) byGroup.set(group, []);
+                byGroup.get(group).push(values[i]);
+            }
+        });
+
+        const groupOrder = grouping === 'simple' ? ['El Nino','Neutral','La Nina'] : ['El Nino (VSE)','El Nino (SE)','El Nino (ME)','El Nino (WE)','Neutral','La Nina (WL)','La Nina (ML)','La Nina (SL)'];
+        const groupsPresent = groupOrder.filter(g => byGroup.has(g));
+        
+        const meanCalc = a => a.length ? a.reduce((x,y)=>x+y,0)/a.length : 0;
+        const stdCalc = a => { const m=meanCalc(a); return a.length > 1 ? Math.sqrt(meanCalc(a.map(v=>(v-m)**2))) : 0; };
+
+        const compMeans = groupsPresent.map(g => meanCalc(byGroup.get(g)));
+        const compStd = groupsPresent.map(g => stdCalc(byGroup.get(g)));
+        const compN = groupsPresent.map(g => byGroup.get(g).length);
+        
+        const validValues = values.filter((_, i) => ensoInfo[i].group !== 'Pending/TBD');
+        const overallMean = meanCalc(validValues);
+        const overallStd = stdCalc(validValues);
+
+        const xLabelsWithN = groupsPresent.map((g, i) => `${g.replace(' (','<br>(')}<br><span style="font-size:11px; color:#64748b;">(n=${compN[i]})</span>`);
+
+        Plotly.newPlot('chartEnsoComposite', [{
+            x: xLabelsWithN, y: compMeans, type: 'bar',
+            error_y: { type: 'data', array: compStd, visible: true, color: '#475569' },
+            marker: { color: groupsPresent.map(g => PHASE_COLORS[g.split(' ')[0] + (g.includes('Nina')?' Nina':' Nino')] || PHASE_COLORS[g.split(' (')[0]] || '#94a3b8') }
+        }], {
+            margin: { t: 30, r: 20, b: 65, l: 50 }, 
+            yaxis: { title: `${document.getElementById('ensoMetricSelect').options[document.getElementById('ensoMetricSelect').selectedIndex].text}` }, 
+            font: { family: 'Inter, sans-serif' },
+            shapes: [{ type: 'line', x0: -0.5, x1: groupsPresent.length - 0.5, y0: overallMean, y1: overallMean, line: { color: '#1e293b', width: 2, dash: 'dot' } }],
+            annotations: [{ x: 1.0, xref: 'paper', y: -0.15, yref: 'paper', text: `<b>Baseline Mean: ${overallMean.toFixed(isCount ? 2 : 1)} ${unit}</b>`, showarrow: false, xanchor: 'right', yanchor: 'top', font: { size: 12, color: '#475569' } }]
+        }, { displayModeBar: false, responsive: true });
+
+        const z = values.map((v, i) => ensoInfo[i].group !== 'Pending/TBD' && overallStd ? (v - overallMean) / overallStd : 0);
+        const barColors = years.map((_, i) => PHASE_COLORS[ensoInfo[i].simple] || PHASE_COLORS['Pending/TBD']);
+        const rollZ = z.map((_, i, arr) => i < 4 ? null : (arr[i]+arr[i-1]+arr[i-2]+arr[i-3]+arr[i-4])/5);
+
+        Plotly.newPlot('chartEnsoAnomaly', [
+            { x: years, y: z, type:'bar', marker:{color: barColors}, name: 'Yearly Anomaly' },
+            { x: years, y: rollZ, type:'scatter', mode:'lines', line:{color:'#0f172a', width:3}, name: '5-Yr Rolling Trend' }
+        ], {
+            margin:{t:20,r:20,b:40,l:50}, yaxis:{title:'Standardized z-score'}, showlegend:true, 
+            legend: {orientation: 'h', y: -0.15, x: 0.5, xanchor: 'center'}, font:{family:'Inter, sans-serif'}
+        }, {displayModeBar:false, responsive:true});
+
+        let html = `<table class="w-full text-sm text-left"><thead class="bg-slate-50 border-b border-slate-200"><tr>
+            <th class="py-3 px-4 font-semibold text-slate-600">Year</th>
+            <th class="py-3 px-4 font-semibold text-slate-600">${document.getElementById('ensoMetricSelect').options[document.getElementById('ensoMetricSelect').selectedIndex].text}</th>
+            <th class="py-3 px-4 font-semibold text-slate-600">ENSO Phase</th>
+            </tr></thead><tbody class="divide-y divide-slate-100">`;
+        
+        years.forEach((y, i) => {
+            let color = PHASE_COLORS[ensoInfo[i].simple] || PHASE_COLORS['Pending/TBD'];
+            html += `<tr class="hover:bg-slate-50 transition-colors">
+            <td class="py-2.5 px-4 text-slate-700 mono font-medium">${y}</td>
+            <td class="py-2.5 px-4 font-bold text-slate-900 mono">${values[i].toFixed(isCount ? 2 : 1)}</td>
+            <td class="py-2.5 px-4 font-semibold" style="color: ${color}">${ensoInfo[i].label}</td>
+            </tr>`;
+        });
+        html += `</tbody></table>`;
+        document.getElementById('ensoYearTableWrap').innerHTML = html;
+    }
+
+    init();
+</script>
+</body>
+</html>
